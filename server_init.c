@@ -11,6 +11,7 @@
 #include <arpa/inet.h>
 #include <dirent.h>
 #include <signal.h>
+#include <pthread.h>
 
 #include "utils.h"
 
@@ -131,9 +132,11 @@ void manage_option(int argc, char **argv) {
 
             case '?':
                 error_found("Error: Invalid argument option!\n");
+                break;
 
             default:
                 error_found("Error in getopt!\n");
+                break;
         }
     }
     if (flag_n && !flag_m && MAX_CONN_NUM < MIN_TH_NUM)
@@ -148,7 +151,14 @@ void struct_init(void) {
     pthread_mutex_t *mutex_cond, *mutex_cache, *mutex_th_num;
     pthread_cond_t *cond_th_init, *cond_max_conn;
     int i;
-    
+
+    mutex_cond = malloc(sizeof(pthread_mutex_t));
+    mutex_cache = malloc(sizeof(pthread_mutex_t));
+    mutex_th_num = malloc(sizeof(pthread_mutex_t));
+    cond_th_init = malloc(sizeof(pthread_cond_t));
+    cond_max_conn = malloc(sizeof(pthread_cond_t));
+    SYN = malloc(sizeof(struct th_sync));
+
     if (pthread_mutex_init(mutex_cond, NULL) != 0 ||
         pthread_mutex_init(mutex_cache, NULL) != 0 ||
         pthread_mutex_init(mutex_th_num, NULL) != 0 ||
@@ -229,6 +239,7 @@ void image_resize(void) {
     // %s image's path; %d resizing percentage
     char *convert = "convert %s -resize %d%% %s;exit";
     struct image **i = &IMAGES;
+    int first_image = 1;
 
     memset(input, 0, PATH_MAX);
     memset(output, 0, PATH_MAX);
@@ -263,16 +274,32 @@ void image_resize(void) {
                     continue;
                 }
 
+                if (strcmp(k, ".c") == 0) {
+                    fprintf(stderr, "File '%s' was skipped\n", ent->d_name);
+                    continue;
+                }
+
+                if (strcmp(k, ".o") == 0) {
+                    fprintf(stderr, "File '%s' was skipped\n", ent->d_name);
+                    continue;
+                }
+
+                if (strcmp(k, ".h") == 0) {
+                    fprintf(stderr, "File '%s' was skipped\n", ent->d_name);
+                    continue;
+                }
+
                 if (strcmp(k, ".gif") != 0 && strcmp(k, ".GIF") != 0 &&
                     strcmp(k, ".jpg") != 0 && strcmp(k, ".JPG") != 0 &&
                     strcmp(k, ".png") != 0 && strcmp(k, ".PNG") != 0) {
                     fprintf(stderr, "Warning: file '%s' may have an unsupported format! The server support only file "
-                                    ".gif, .jpg, .png\\n", ent->d_name);
+                                    ".gif, .jpg, .png\n", ent->d_name);
+                    continue;
                 }
             }
             else {
-                fprintf(stderr, "Warning: file '%s' may have an unsupported format! The server support only file "
-                                    ".gif, .jpg, .png\n", ent->d_name);
+                fprintf(stderr, "File '%s' was skipped\n", ent -> d_name);
+                continue;
             }
         }
 
@@ -280,12 +307,16 @@ void image_resize(void) {
         sprintf(output, "%s/%s", TMP_RESIZED_PATH, ent -> d_name);
         sprintf(command, convert, input, RESIZE_PERC, output);
 
+        if (PRINT_DUMP)
+            printf("Try to resize image %s.\n", ent -> d_name);
+
         if (system(command))
             error_found("Error in resizing images!\n");
 
         // populate the dynamic struct containing the resizing images
         alloc_res_img(i, output, first_image);
         i = &(*i) -> next_img;
+        first_image = 0;
     }
 
     if (closedir(dir))
@@ -295,28 +326,38 @@ void image_resize(void) {
 }
 
 void html_create(void) {
+    printf("Sono qui 1\n");
     // create main page html
     size_t size = 4;
-    char html[STR_DIM * size], *w, *q;
+    char *html, *w, *q;
     struct image **i = &IMAGES;
+    printf("Sono qui 2\n");
     // %s page's title; %s header; %s text.
     char *head = "<!DOCTYPE html><html><head><meta charset=\"utf-8\" /><title>%s</title>"
                             "<style type=\"text/css\"></style><script type=\"text/javascript\"></script></head>"
                             "<body background=\"\"><h1>%s</h1><br><br><h3>%s</h3><hr><br>";
+    printf("Sono qui 3\n");
     // %s image's name; %s image's name; %s image's path; %s image's name.
     char *k = "<b>%s</b><br><br><a href=\"%s\"><img src=\"%s/%s\" height=\"130\" weight=\"100\"></a><br><br><br><br>";
-    
+
+    printf("Sono qui 4\n");
     html = malloc((size_t) size * STR_DIM * sizeof(char));
     if (!html)
         error_found("Error in malloc!\n");
     memset(html, 0, (size_t) size * STR_DIM * sizeof(char));
 
+    printf("Sono qui 5\n");
+    HTML[0] = malloc(sizeof(FILE) * 3);
+
+    printf("Sono qui 6\n");
     HTML[0] = open_file(LOG_PATH, "main_page");
+    printf("Sono qui 7\n");
     sprintf(html, head, "WebServerProject", "Welcome", "Select an image below");
     size_t len_h = strlen(html), new_len_h;
+    size_t len = strlen(html);
 
+    printf("Sono qui 8\n");
     while (!*i) {
-        size_t len = strlen(html);
         if (len + STR_DIM >= size * STR_DIM) {
             size++;
             html = realloc(html, (size_t) size * STR_DIM);
@@ -324,20 +365,25 @@ void html_create(void) {
                 error_found("Error in realloc!\n");
             memset(html + len, 0, (size_t) size * STR_DIM - len);
         }
-        
-        if (!(w = strrchr(tmp_resized, '/')))
+
+        printf("Sono qui 8.1\n");
+        if (!(w = strrchr(TMP_RESIZED_PATH, '/')))
             error_found("Unexpected error creating HTML root file\n");
+        printf("Sono qui 8.2\n");
         w++;
+        printf("Sono qui 8.3\n");
         q = html + len;
-        sprintf(q, k, *i -> name, *i -> name, w, *i -> name);
-        i = &(*i) -> next_img;
+        sprintf(q, k, &(*i) -> name, &(*i) -> name, w, &(*i) -> name);
+        printf("Sono qui 8.4\n");
+        *i = &(*i) -> next_img;
     }
-    
+
+    printf("Sono qui 9\n");
     new_len_h = strlen(html);
     if (len_h == new_len_h)
         error_found("Error: there aren't images to resize!\n");
 
-    h = "</body></html>";
+    head = "</body></html>";
     if (new_len_h + STR_DIM > size * STR_DIM) {
         size++;
         html = realloc(html, (size_t) size * STR_DIM);
@@ -347,22 +393,24 @@ void html_create(void) {
     }
     k = html;
     k += strlen(html);
-    strcpy(k, h);
+    strcpy(k, head);
     writef(html, HTML[0]);
     if (fclose(HTML[0]) != 0) {
         error_found("Error in fclose!");
     }
 
+    printf("Sono qui 10\n");
 
     // create error page html
     // %s page's title; %s page's header; %s errror's description
     head = "<!DOCTYPE HTML PUBLIC \"-//IETF//DTD HTML 2.0//EN\"><html><head><title>%s</title>"
            "</head><body><h1>%s</h1><p>%s</p></body></html>\0";
-    size_t len = strlen(head) + 2 * STR_DIM * sizeof(char);
+    len = strlen(head) + 2 * STR_DIM * sizeof(char);
 
     HTML[1] = open_file(LOG_PATH, "not_found");
     HTML[2] = open_file(LOG_PATH, "bad_request");
 
+    printf("Sono qui 11\n");
     char *description1 = malloc(len);
     char *description2 = malloc(len);
     if (!description1 || !description2)

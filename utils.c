@@ -9,6 +9,7 @@
 #include <limits.h>
 #include <dirent.h>
 #include <unistd.h>
+#include <time.h>
 
 #include "utils.h"
 
@@ -24,8 +25,8 @@ char *USAGE_MSG =
         "\t\t-r resize images' percentage, default value: 50.\n"
         "\t\t-c maximum number of image in cache, default value: -1 (infinite).\n"
         "\t\t-h help\n\n";
-char *LOG_PATH;
-char *IMG_PATH;
+char LOG_PATH[PATH_MAX];
+char IMG_PATH[PATH_MAX];
 char TMP_RESIZED_PATH[PATH_MAX] = "/tmp/RESIZED.XXXXXX";
 char TMP_CACHE_PATH[PATH_MAX] = "/tmp/CACHE.XXXXXX";
 int MIN_TH_NUM = 10;
@@ -34,7 +35,7 @@ int RESIZE_PERC = 50;
 int CACHE_SIZE = -1;
 int LISTEN_SD;
 FILE *LOG;
-FILE HTML[3];
+FILE *HTML[3];
 
 struct image *IMAGES;
 struct cache *CACHE;
@@ -67,18 +68,23 @@ void writef(char *s, FILE *file) {
 
 // dealloc all memory used by server
 void free_mem() {
-    free(SYN.clients);
-    free(SYN.new_c);
-    if (CACHE_SIZE >= 0 && SYN.cache_hit_head &&SYN.cache_hit_tail) {
+    free(SYN -> clients);
+    free(SYN -> mutex_th_num);
+    free(SYN -> mutex_cache);
+    free(SYN -> mutex_cond);
+    free(SYN -> cond_max_conn);
+    free(SYN -> cond_th_init);
+    free(SYN -> new_c);
+    if (CACHE_SIZE >= 0 && SYN -> cache_hit_head && SYN -> cache_hit_tail) {
         struct cache_hit *to_be_removed;
-        while (SYN.cache_hit_tail) {
-            to_be_removed = SYN.cache_hit_tail;
-            SYN.cache_hit_tail = SYN.cache_hit_tail -> next_hit;
+        while (SYN -> cache_hit_tail) {
+            to_be_removed = SYN -> cache_hit_tail;
+            SYN -> cache_hit_tail = SYN -> cache_hit_tail -> next_hit;
             free(to_be_removed);
         }
     }
-    rm_dir(tmp_resized);
-    rm_dir(tmp_cache);
+    rm_dir(TMP_RESIZED_PATH);
+    rm_dir(TMP_CACHE_PATH);
 }
 
 // Used to remove directory from file system
@@ -91,7 +97,7 @@ void rm_dir(char *directory) {
     fprintf(stdout, "Remove '%s'\n", directory);
     verify = strrchr(directory, '/') + 1;
     if (!verify)
-        exit_on_error("Unexpected error in remove directory!\n");
+        error_found("Unexpected error in remove directory!\n");
 
     // case tmp dir not create
     verify = strrchr(directory, '.') + 1;
@@ -102,8 +108,8 @@ void rm_dir(char *directory) {
     dir = opendir(directory);
     if (!dir) {
         if (errno == EACCES)
-            exit_on_error("Permission denied to open directory!\n");
-        exit_on_error("Error in opendir in remove directory!\n");
+            error_found("Permission denied to open directory!\n");
+        error_found("Error in opendir in remove directory!\n");
     }
 
     while ((ent = readdir(dir)) != NULL) {
@@ -116,29 +122,35 @@ void rm_dir(char *directory) {
     }
 
     if (closedir(dir))
-        exit_on_error("Error in closedir on remove directory!\n");
+        error_found("Error in closedir on remove directory!\n");
 
     errno = 0;
     if (rmdir(directory)) {
         switch (errno) {
             case EBUSY:
                 sprintf(e, "Directory %s not removed: resource busy\n", directory);
-                exit_on_error(e);
+                error_found(e);
+                break;
 
             case ENOMEM:
                 sprintf(e, "Directory %s not removed: Insufficient kernel memory\n", directory);
-                exit_on_error(e);
+                error_found(e);
+                break;
 
             case EROFS:
-                sprintf(e, "Directory %s not removed: Pathname refers to a directory on a read-only file system\n", path);
-                exit_on_error(e);
+                sprintf(e, "Directory %s not removed: Pathname refers to a directory on a read-only file system\n",
+                        directory);
+                error_found(e);
+                break;
 
             case ENOTEMPTY:
-                sprintf(e, "Directory %s not removed: Directory not empty!\n", path);
-                exit_on_error(e);
+                sprintf(e, "Directory %s not removed: Directory not empty!\n", directory);
+                error_found(e);
+                break;
 
             default:
-                exit_on_error("Error in rmdir\n");
+                error_found("Error in rmdir\n");
+                break;
         }
     }
 }
@@ -152,31 +164,38 @@ void rm_link(char *path) {
         switch (errno) {
             case EBUSY:
                 sprintf(e, "File %s cannot be unlinked: It is being use by the system\n", path);
-                exit_on_error(e);
+                error_found(e);
+                break;
 
             case EIO:
                 sprintf(e, "File %s cannot be unlinked: An I/O error occurred\n", path);
-                exit_on_error(e);
+                error_found(e);
+                break;
 
             case ENAMETOOLONG:
                 sprintf(e, "File %s cannot be unlinked: Pathname was too long\n", path);
-                exit_on_error(e);
+                error_found(e);
+                break;
 
             case ENOMEM:
                 sprintf(e, "File %s cannot be unlinked: Insufficient kernel memory was available\n", path);
-                exit_on_error(e);
+                error_found(e);
+                break;
 
             case EPERM:
                 sprintf(e, "File %s cannot be unlinked: The file system does not allow unlinking of files\n",path);
-                exit_on_error(e);
+                error_found(e);
+                break;
 
             case EROFS:
                 sprintf(e, "File %s cannot be unlinked: Pathname refers to a file on a read-only file system\n", path);
-                exit_on_error(e);
+                error_found(e);
+                break;
 
             default:
                 sprintf(e, "File %s cannot be unlinked: Error in unlink\n", path);
-                exit_on_error(e);
+                error_found(e);
+                break;
         }
     }
 }
@@ -213,10 +232,13 @@ void check_is_file(char *path, struct stat *buf) {
 // Open and return a file from fs
 FILE *open_file(char *path, char *file_name) {
     errno = 0;
-    char s[strlen(path) + 4 + 1];
-    memset(s, 0, strlen(path) + 1 + strlen(file_name) + 1);
+    char s[strlen(path) + 1 + strlen(file_name)];
+    memset(s, 0, (size_t) strlen(path) + 1 + strlen(file_name));
+    printf("Sono qui 1\n");
     sprintf(s, "%s/%s", path, file_name);
+    printf("Sono qui 1\n");
     FILE *f = fopen(s, "a");
+    printf("Sono qui 1\n");
     if (!f) {
         if (errno == EACCES) {
             error_found("Error in fopen: missing permission!");
@@ -255,25 +277,24 @@ void alloc_res_img(struct image **i, char *path, int first_image) {
     struct image *new_img;
     struct stat buf;
 
+    new_img = malloc(sizeof(struct image));
+    if (!new_img)
+        error_found("Error in malloc\n");
+    memset(new_img, 0, sizeof(struct image));
+
     img_name = strrchr(path, '/');
     if (!img_name) {
         error_found("alloc_r_img: Error analyzing file");
     }
     else {
-        strcpy(new_img->name, img_name++);
+        strcpy(new_img -> name, img_name++);
     }
-
-    new_img = malloc(sizeof(struct image));
-    if (!new_img)
-        error_found("Error in malloc\n");
-
     memset(new_path, 0, PATH_MAX);
-    memset(new_img, 0, sizeof(struct image));
 
     check_is_file(path, &buf);
 
-    new_img->size_r = (size_t) buf.st_size;
-    new_img->img_c = NULL;
+    new_img -> size_r = (size_t) buf.st_size;
+    new_img -> img_c = NULL;
 
     if (first_image) {
         new_img->next_img = *i;

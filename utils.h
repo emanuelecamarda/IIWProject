@@ -12,6 +12,7 @@
 #include <arpa/inet.h>
 
 #define STR_DIM 1024
+#define PRINT_DUMP 1
 
 struct image {
     // Name of current image
@@ -63,8 +64,8 @@ struct th_sync {
 
 extern int PORT;
 extern char *USAGE_MSG;
-extern char *LOG_PATH;
-extern char *IMG_PATH;
+extern char LOG_PATH[PATH_MAX];
+extern char IMG_PATH[PATH_MAX];
 extern char TMP_RESIZED_PATH[PATH_MAX];
 extern char TMP_CACHE_PATH[PATH_MAX];
 extern int MIN_TH_NUM;
@@ -73,7 +74,7 @@ extern int RESIZE_PERC;
 extern int CACHE_SIZE;
 extern int LISTEN_SD;
 extern FILE *LOG;
-extern FILE HTML[3];
+extern FILE *HTML[3];
 
 extern struct image *IMAGES;
 extern struct cache *CACHE;
