@@ -211,11 +211,6 @@ void lock(pthread_mutex_t *m) {
         error_found("Error in pthread_mutex_lock\n");
 }
 
-// Used to release mutex
-void unlock(pthread_mutex_t *m) {
-    if (pthread_mutex_unlock(m) != 0)
-        error_found("Error in pthread_mutex_unlock\n");
-}
 
 // Used waiting for the occurrence of an event
 void wait_t(pthread_cond_t *c, pthread_mutex_t *m) {

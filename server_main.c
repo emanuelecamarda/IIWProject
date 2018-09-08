@@ -2,20 +2,23 @@
 // Created by emanuele on 31/08/18.
 //
 #include <stdlib.h>
+#include <stdio.h>
 
-#include "server_init.h"
+#include "server_funct.h"
 #include "utils.h"
 
-void server_init(int argc, char **argv);
+void init(int argc, char **argv);
 
 int main(int argc, char **argv) {
-    server_init(argc, argv);
+    init(argc, argv);
+
+    server_work();
 
     exit(EXIT_SUCCESS);
 }
 
 // Do all the operation to initialize the server
-void server_init(int argc, char **argv) {
+void init(int argc, char **argv) {
     if(PRINT_DUMP)
         printf("Start\n");
     // setting paths of images e log file
@@ -46,4 +49,16 @@ void server_init(int argc, char **argv) {
     html_create();
     if (PRINT_DUMP)
         printf("Finish html_create()\n");
+    // create thread to manage user's input
+    create_th(manage_input, NULL);
+    if (PRINT_DUMP)
+        printf("Finish create_th(manage_input, NULL)\n");
+    // create starting threads
+    th_init(&MIN_TH_NUM);
+    if (PRINT_DUMP)
+        printf("Finish th_init(MIN_TH_NUM)\n");
+    if (PRINT_DUMP)
+        printf("Port number: %d\nImages' path: %s\nLog file's path: %s\nMinimum threads' number: %d\n"
+               "Maximum connection's number: %d\nResize images' percentage: %d\nCache size: %d\n", PORT, IMG_PATH,
+               LOG_PATH, MIN_TH_NUM, MAX_CONN_NUM, RESIZE_PERC, CACHE_SIZE);
 }

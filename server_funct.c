@@ -14,6 +14,7 @@
 #include <pthread.h>
 
 #include "utils.h"
+#include "threads_work.h"
 
 // set the default value for path
 void set_default_path(void) {
@@ -61,6 +62,7 @@ void manage_option(int argc, char **argv) {
 
             case 'l':
                 check_is_dir(optarg);
+                memset(LOG_PATH, (int) '\0', PATH_MAX);
 
                 if (optarg[strlen(optarg) - 1] != '/') {
                     strncpy(LOG_PATH, optarg, strlen(optarg));
@@ -74,6 +76,7 @@ void manage_option(int argc, char **argv) {
 
             case 'i':
                 check_is_dir(optarg);
+                memset(IMG_PATH, (int) '\0', PATH_MAX);
 
                 if (optarg[strlen(optarg) - 1] != '/') {
                     strncpy(IMG_PATH, optarg, strlen(optarg));
@@ -148,49 +151,100 @@ void manage_option(int argc, char **argv) {
 }
 
 void struct_init(void) {
-    pthread_mutex_t *mutex_cond, *mutex_cache, *mutex_th_num;
-    pthread_cond_t *cond_th_init, *cond_max_conn;
+    pthread_mutex_t *cache_syn_mtx, *state_syn_mtx, *th_syn_mtx, *accept_conn_syn_mtx;
+    pthread_cond_t *cache_syn_cond, *state_syn_cond, *th_syn_cond;
     int i;
 
-    mutex_cond = malloc(sizeof(pthread_mutex_t));
-    mutex_cache = malloc(sizeof(pthread_mutex_t));
-    mutex_th_num = malloc(sizeof(pthread_mutex_t));
-    cond_th_init = malloc(sizeof(pthread_cond_t));
-    cond_max_conn = malloc(sizeof(pthread_cond_t));
-    SYN = malloc(sizeof(struct th_sync));
+    cache_syn_mtx = malloc(sizeof(pthread_mutex_t));
+    if (!cache_syn_mtx) {
+        error_found("Error in malloc!\n");
+    }
+    cache_syn_cond = malloc(sizeof(pthread_cond_t));
+    if (!cache_syn_cond) {
+        error_found("Error in malloc!\n");
+    }
+    state_syn_mtx = malloc(sizeof(pthread_mutex_t));
+    if (!state_syn_mtx) {
+        error_found("Error in malloc!\n");
+    }
+    state_syn_cond = malloc(sizeof(pthread_cond_t));
+    if (!state_syn_cond) {
+        error_found("Error in malloc!\n");
+    }
+    th_syn_mtx = malloc(sizeof(pthread_mutex_t));
+    if (th_syn_mtx) {
+        error_found("Error in malloc!\n");
+    }
+    th_syn_cond = malloc(sizeof(pthread_cond_t));
+    if (!th_syn_cond) {
+        error_found("Error in malloc!\n");
+    }
+    accept_conn_syn_mtx = malloc(sizeof(pthread_mutex_t));
+    if (accept_conn_syn_mtx) {
+        error_found("Error in malloc!\n");
+    }
+    accept_conn_syn -> cond = malloc(sizeof(pthread_cond_t) * MAX_CONN_NUM);
+    if (!accept_conn_syn -> cond) {
+        error_found("Error in malloc!\n");
+    }
+    cache_syn = malloc(sizeof(struct cache_syn_t));
+    if (!cache_syn) {
+        error_found("Error in malloc!\n");
+    }
+    state_syn = malloc(sizeof(struct state_syn_t));
+    if (state_syn) {
+        error_found("Error in malloc!\n");
+    }
+    th_syn = malloc(sizeof(struct th_syn_t));
+    if (th_syn) {
+        error_found("Error in malloc!\n");
+    }
+    accept_conn_syn = malloc(sizeof(struct accept_conn_syn_t));
+    if (accept_conn_syn) {
+        error_found("Error in malloc!\n");
+    }
 
-    if (pthread_mutex_init(mutex_cond, NULL) != 0 ||
-        pthread_mutex_init(mutex_cache, NULL) != 0 ||
-        pthread_mutex_init(mutex_th_num, NULL) != 0 ||
-        pthread_cond_init(cond_th_init, NULL) != 0 ||
-        pthread_cond_init(cond_max_conn, NULL) != 0)
+    if (pthread_mutex_init(cache_syn_mtx, NULL) != 0 ||
+        pthread_mutex_init(state_syn_mtx, NULL) != 0 ||
+        pthread_mutex_init(th_syn_mtx, NULL) != 0 ||
+        pthread_mutex_init(accept_conn_syn_mtx, NULL) ||
+        pthread_cond_init(cache_syn_cond, NULL) != 0 ||
+        pthread_cond_init(state_syn_cond, NULL) != 0 ||
+        pthread_cond_init(th_syn_cond, NULL) != 0)
         error_found("Error in pthread_mutex_init or pthread_cond_init!\n");
 
-    SYN -> connections = SYN -> slot_c = SYN -> to_kill = SYN -> th_act = 0;
-    SYN -> mutex_cond = mutex_cond;
-    SYN -> mutex_cache = mutex_cache;
-    SYN -> mutex_th_num = mutex_th_num;
-    SYN -> cond_th_init = cond_th_init;
-    SYN -> cond_max_conn = cond_max_conn;
-    SYN -> th_act_thr = MIN_TH_NUM;
-    SYN -> cache_hit_head = SYN -> cache_hit_tail = NULL;
+    memset(accept_conn_syn -> cond, (int) '\0', sizeof(pthread_cond_t) * MAX_CONN_NUM);
+
+    cache_syn -> mtx = cache_syn_mtx;
+    cache_syn -> cond = cache_syn_cond;
+    cache_syn -> cache_hit_head = cache_syn -> cache_hit_tail = NULL;
+    state_syn -> mtx = state_syn_mtx;
+    state_syn -> cond = state_syn_cond;
+    th_syn -> mtx = th_syn_mtx;
+    th_syn -> cond = th_syn_cond;
+    accept_conn_syn -> mtx = accept_conn_syn_mtx;
+    accept_conn_syn -> conn_sd = -1;
+    state_syn -> conn_num = th_syn -> to_kill = state_syn -> init_th_num = 0;
     IMAGES = NULL;
 
-    SYN -> clients = malloc(sizeof(int) * MAX_CONN_NUM);
-    SYN -> new_c = malloc(sizeof(pthread_cond_t) * MAX_CONN_NUM);
-    if (!SYN -> clients || !SYN -> new_c) {
+    accept_conn_syn -> cl_addr = malloc(sizeof(struct sockaddr_in));
+    if (!accept_conn_syn -> cl_addr){
+        fprintf(stderr, "Error in malloc()!");
+    }
+
+    th_syn -> clients = malloc(sizeof(int) * MAX_CONN_NUM);
+    if (!th_syn -> clients) {
         error_found("Error in malloc!\n");
     } else {
-        memset(SYN -> clients, 0, sizeof(int) * MAX_CONN_NUM);
-        memset(SYN->new_c, 0, sizeof(pthread_cond_t) * MAX_CONN_NUM);
+        memset(th_syn -> clients, 0, sizeof(int) * MAX_CONN_NUM);
     }
-    // -1 := slot with thread initialized; -2 := empty slot.
+    // -1 := slot with thread initialized; -2 := empty slot
     for (i = 0; i < MAX_CONN_NUM; ++i) {
-        SYN -> clients[i] = -2;
+        th_syn -> clients[i] = -2;
         pthread_cond_t cond;
         if (pthread_cond_init(&cond, NULL) != 0)
-            error_found("Error in pthread_cond_init\n");
-        SYN -> new_c[i] = cond;
+            error_found("Error in pthread_cond_init!\n");
+        accept_conn_syn -> cond[i] = cond;
     }
 }
 
@@ -238,8 +292,7 @@ void image_resize(void) {
     char *k, input[PATH_MAX], output[PATH_MAX], command[STR_DIM];
     // %s image's path; %d resizing percentage
     char *convert = "convert %s -resize %d%% %s;exit";
-    struct image **i = &IMAGES;
-    int first_image = 1;
+    struct image_t **i = &IMAGES;
 
     memset(input, 0, PATH_MAX);
     memset(output, 0, PATH_MAX);
@@ -291,7 +344,8 @@ void image_resize(void) {
 
                 if (strcmp(k, ".gif") != 0 && strcmp(k, ".GIF") != 0 &&
                     strcmp(k, ".jpg") != 0 && strcmp(k, ".JPG") != 0 &&
-                    strcmp(k, ".png") != 0 && strcmp(k, ".PNG") != 0) {
+                    strcmp(k, ".png") != 0 && strcmp(k, ".PNG") != 0 &&
+                    strcmp(k, ".jpeg") != 0 && strcmp(k, ".JPEG") != 0) {
                     fprintf(stderr, "Warning: file '%s' may have an unsupported format! The server support only file "
                                     ".gif, .jpg, .png\n", ent->d_name);
                     continue;
@@ -308,15 +362,14 @@ void image_resize(void) {
         sprintf(command, convert, input, RESIZE_PERC, output);
 
         if (PRINT_DUMP)
-            printf("Try to resize image %s.\n", ent -> d_name);
+            printf("Try to resize image %s\n", ent -> d_name);
 
         if (system(command))
             error_found("Error in resizing images!\n");
 
         // populate the dynamic struct containing the resizing images
-        alloc_res_img(i, output, first_image);
+        alloc_res_img(i, output);
         i = &(*i) -> next_img;
-        first_image = 0;
     }
 
     if (closedir(dir))
@@ -326,59 +379,52 @@ void image_resize(void) {
 }
 
 void html_create(void) {
-    printf("Sono qui 1\n");
     // create main page html
     size_t size = 4;
     char *html, *w, *q;
-    struct image **i = &IMAGES;
-    printf("Sono qui 2\n");
+    struct image_t *i = IMAGES;
     // %s page's title; %s header; %s text.
     char *head = "<!DOCTYPE html><html><head><meta charset=\"utf-8\" /><title>%s</title>"
                             "<style type=\"text/css\"></style><script type=\"text/javascript\"></script></head>"
                             "<body background=\"\"><h1>%s</h1><br><br><h3>%s</h3><hr><br>";
-    printf("Sono qui 3\n");
     // %s image's name; %s image's name; %s image's path; %s image's name.
     char *k = "<b>%s</b><br><br><a href=\"%s\"><img src=\"%s/%s\" height=\"130\" weight=\"100\"></a><br><br><br><br>";
 
-    printf("Sono qui 4\n");
     html = malloc((size_t) size * STR_DIM * sizeof(char));
     if (!html)
         error_found("Error in malloc!\n");
     memset(html, 0, (size_t) size * STR_DIM * sizeof(char));
 
-    printf("Sono qui 5\n");
     HTML[0] = malloc(sizeof(FILE) * 3);
 
-    printf("Sono qui 6\n");
     HTML[0] = open_file(LOG_PATH, "main_page");
-    printf("Sono qui 7\n");
     sprintf(html, head, "WebServerProject", "Welcome", "Select an image below");
     size_t len_h = strlen(html), new_len_h;
-    size_t len = strlen(html);
 
-    printf("Sono qui 8\n");
-    while (!*i) {
+    printf("html main page: %s\n", html);
+
+    while (1) {
+        if (!i)
+            break;
+
+        size_t len = strlen(html);
         if (len + STR_DIM >= size * STR_DIM) {
             size++;
             html = realloc(html, (size_t) size * STR_DIM);
             if (!html)
                 error_found("Error in realloc!\n");
-            memset(html + len, 0, (size_t) size * STR_DIM - len);
+            memset(html + len, (int) '\0', STR_DIM);
         }
 
-        printf("Sono qui 8.1\n");
         if (!(w = strrchr(TMP_RESIZED_PATH, '/')))
             error_found("Unexpected error creating HTML root file\n");
-        printf("Sono qui 8.2\n");
         w++;
-        printf("Sono qui 8.3\n");
         q = html + len;
-        sprintf(q, k, &(*i) -> name, &(*i) -> name, w, &(*i) -> name);
-        printf("Sono qui 8.4\n");
-        *i = &(*i) -> next_img;
+        sprintf(q, k, i -> name, i -> name, w, i -> name);
+        i = i -> next_img;
     }
 
-    printf("Sono qui 9\n");
+    printf("html main page: %s\n", html);
     new_len_h = strlen(html);
     if (len_h == new_len_h)
         error_found("Error: there aren't images to resize!\n");
@@ -399,18 +445,16 @@ void html_create(void) {
         error_found("Error in fclose!");
     }
 
-    printf("Sono qui 10\n");
 
     // create error page html
     // %s page's title; %s page's header; %s errror's description
     head = "<!DOCTYPE HTML PUBLIC \"-//IETF//DTD HTML 2.0//EN\"><html><head><title>%s</title>"
            "</head><body><h1>%s</h1><p>%s</p></body></html>\0";
-    len = strlen(head) + 2 * STR_DIM * sizeof(char);
+    size_t  len = strlen(head) + 3 * STR_DIM * sizeof(char);
 
     HTML[1] = open_file(LOG_PATH, "not_found");
     HTML[2] = open_file(LOG_PATH, "bad_request");
 
-    printf("Sono qui 11\n");
     char *description1 = malloc(len);
     char *description2 = malloc(len);
     if (!description1 || !description2)
@@ -426,5 +470,111 @@ void html_create(void) {
     }
     if (fclose(HTML[2]) != 0) {
         error_found("Error in fclose!");
+    }
+}
+
+// Do Server work
+void server_work(void) {
+    int conn_sd, i = 0, j = 1;
+    struct sockaddr_in cl_addr;
+    socklen_t addr_size = sizeof(struct sockaddr_in);
+
+    fprintf(stdout, "\n\n\nWaiting for incoming connection...\n");
+    // Accept connections
+    while (1) {
+        // check MAX_CONN_NUM
+        lock(state_syn -> mtx); {
+            while (state_syn -> conn_num >= MAX_CONN_NUM) {
+                wait_cond(state_syn -> cond, state_syn -> mtx);
+            }
+        } unlock(state_syn -> mtx);
+
+        memset(&cl_addr, (int) '\0', addr_size);
+        errno = 0;
+        conn_sd = accept(LISTEN_SD, (struct sockaddr *) &cl_addr, &addr_size);
+
+        lock(th_syn -> mtx); {
+            if (conn_sd == -1) {
+                switch (errno) {
+                    case ECONNABORTED:
+                        fprintf(stderr, "Error in accept(): connection has been aborted!\n");
+                        unlock(th_syn->mtx);
+                        break;
+
+                    case ENOBUFS:
+                        error_found("Error in accept(): not enough free memory!\n");
+                        break;
+
+                    case ENOMEM:
+                        error_found("Error in accept(): not enough free memory\n");
+                        break;
+
+                    case EMFILE:
+                        fprintf(stderr, "Error in accept(): too many open files!\n");
+                        lock(state_syn->mtx);
+                        {
+                            int old_conn_num = state_syn->conn_num;
+                            while (old_conn_num >= state_syn->conn_num) {
+                                wait_cond(state_syn->cond, state_syn->mtx);
+                            }
+                            unlock(state_syn->mtx);
+                            unlock(th_syn->mtx);
+                            break;
+
+                            case EPROTO:
+                                fprintf(stderr, "Error in accept(): protocol error!\n");
+                            unlock(th_syn->mtx);
+                            break;
+
+                            case EPERM:
+                                fprintf(stderr, "Error in accept(): firewall rules forbid connection!\n");
+                            unlock(th_syn->mtx);
+                            break;
+
+                            case ETIMEDOUT:
+                                fprintf(stderr, "Error in accept(): timeout occure!\n");
+                            unlock(th_syn->mtx);
+                            break;
+
+                            case EBADF:
+                                fprintf(stderr, "Error in accept(): bad file number!\n");
+                            unlock(th_syn->mtx);
+                            break;
+
+                            default:
+                                error_found("Error in accept()!\n");
+                            break;
+                        }
+                }
+            }
+
+            //printf("\nNUM CONN: %d\t\tTH_ACT: %d\t\tTH_THR: %d\n\n", k -> connections, k -> th_act, k -> th_act_thr);
+            j = 1;
+            while (th_syn -> clients[i] != -1) {
+                if (j > MAX_CONN_NUM) {
+                    j = -1;
+                    break;
+                }
+                i = (i + 1) % MAX_CONN_NUM;
+                j++;
+            }
+            // MAX_CONN_NUM
+            if (j == -1) {
+                unlock(th_syn -> mtx);
+                continue;
+            }
+            th_syn -> clients[i] = conn_sd;
+            lock(accept_conn_syn -> mtx); {
+                while (accept_conn_syn -> conn_sd != -1)
+                    wait_cond(accept_conn_syn -> cond + i, accept_conn_syn -> mtx);
+                memset(accept_conn_syn -> cl_addr, (int) '\0', addr_size);
+                memcpy(accept_conn_syn -> cl_addr, &cl_addr, addr_size);
+                accept_conn_syn -> conn_sd = conn_sd;
+                signal_cond(accept_conn_syn -> cond + i);
+                while (accept_conn_syn -> conn_sd != -1)
+                    wait_cond(accept_conn_syn -> cond + i, accept_conn_syn -> mtx);
+            } unlock(accept_conn_syn -> mtx);
+            i = (i + 1) % MAX_CONN_NUM;
+        } unlock(th_syn -> mtx);
     }
 }

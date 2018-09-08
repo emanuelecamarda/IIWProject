@@ -10,21 +10,25 @@
 #include <dirent.h>
 #include <unistd.h>
 #include <time.h>
+#include <pthread.h>
 
 #include "utils.h"
 
 int PORT = 11111;
 char *USAGE_MSG =
         "Usage: %s [option]\n\n"
-        "\tThis is the list of the possible option:"
-        "\t\t-p port number, default value: 11111.\n"
-        "\t\t-i image directory's path, default: current directory.\n"
-        "\t\t-l log file directory's path, default: current directory.\n"
-        "\t\t-n initial thread number, default value: 10.\n"
-        "\t\t-m maximum connection number, default value: 100.\n"
-        "\t\t-r resize images' percentage, default value: 50.\n"
-        "\t\t-c maximum number of image in cache, default value: -1 (infinite).\n"
-        "\t\t-h help\n\n";
+        "This is the list of the possible option:\n"
+        "\t-p port number, default value: 11111.\n"
+        "\t-i image directory's path, default: current directory.\n"
+        "\t-l log file directory's path, default: current directory.\n"
+        "\t-n initial thread number, default value: 10.\n"
+        "\t-m maximum connection number, default value: 100.\n"
+        "\t-r resize images' percentage, default value: 50.\n"
+        "\t-c maximum number of image in cache, default value: -1 (infinite).\n"
+        "\t-h help\n\n";
+char *USER_OPT =
+        "Press q or Q to close the server\n"
+        "Press s or S to show the server's state";
 char LOG_PATH[PATH_MAX];
 char IMG_PATH[PATH_MAX];
 char TMP_RESIZED_PATH[PATH_MAX] = "/tmp/RESIZED.XXXXXX";
@@ -36,10 +40,15 @@ int CACHE_SIZE = -1;
 int LISTEN_SD;
 FILE *LOG;
 FILE *HTML[3];
+float TH_SCALING_UP = 3/4;
+float TH_SCALING_DOWN = 1/4;
 
-struct image *IMAGES;
-struct cache *CACHE;
-struct th_sync *SYN;
+struct image_t *IMAGES;
+struct cache_t *cache;
+struct cache_syn_t *cache_syn;
+struct state_syn_t *state_syn;
+struct th_syn_t *th_syn;
+struct accept_conn_syn_t *accept_conn_syn;
 
 // write on stderr and on log file the error that occurs and exit with failure
 void error_found(char *msg) {
@@ -68,23 +77,48 @@ void writef(char *s, FILE *file) {
 
 // dealloc all memory used by server
 void free_mem() {
-    free(SYN -> clients);
-    free(SYN -> mutex_th_num);
-    free(SYN -> mutex_cache);
-    free(SYN -> mutex_cond);
-    free(SYN -> cond_max_conn);
-    free(SYN -> cond_th_init);
-    free(SYN -> new_c);
-    if (CACHE_SIZE >= 0 && SYN -> cache_hit_head && SYN -> cache_hit_tail) {
+    char s[STR_DIM];
+    memset(s, (int) '\0', STR_DIM);
+
+    free(th_syn -> clients);
+    free(th_syn -> mtx);
+    free(th_syn -> cond);
+    free(state_syn -> mtx);
+    free(state_syn -> cond);
+    free(cache_syn -> mtx);
+    free(cache_syn -> cond);
+    free(accept_conn_syn -> mtx);
+    free(accept_conn_syn -> cond);
+    free(accept_conn_syn -> cl_addr);
+    if (CACHE_SIZE >= 0 && cache_syn -> cache_hit_head && cache_syn -> cache_hit_tail) {
         struct cache_hit *to_be_removed;
-        while (SYN -> cache_hit_tail) {
-            to_be_removed = SYN -> cache_hit_tail;
-            SYN -> cache_hit_tail = SYN -> cache_hit_tail -> next_hit;
+        while (cache_syn -> cache_hit_tail) {
+            to_be_removed = cache_syn -> cache_hit_tail;
+            cache_syn -> cache_hit_tail = cache_syn -> cache_hit_tail -> next_hit;
             free(to_be_removed);
         }
     }
+    free(th_syn);
+    free(state_syn);
+    free(cache_syn);
+    free(accept_conn_syn);
     rm_dir(TMP_RESIZED_PATH);
     rm_dir(TMP_CACHE_PATH);
+    if (HTML[0] != NULL) {
+        sprintf(s, "%s/%s", LOG_PATH, "main_page");
+        rm_link(s);
+        memset(s, (int) '\0', STR_DIM);
+    }
+    if (HTML[1] !=  NULL) {
+        sprintf(s, "%s/%s", LOG_PATH, "bad_request");
+        rm_link(s);
+        memset(s, (int) '\0', STR_DIM);
+    }
+    if (HTML[2] != NULL) {
+        sprintf(s, "%s/%s", LOG_PATH, "not_found");
+        rm_link(s);
+        memset(s, (int) '\0', STR_DIM);
+    }
 }
 
 // Used to remove directory from file system
@@ -159,6 +193,8 @@ void rm_dir(char *directory) {
 void rm_link(char *path) {
     char e[STR_DIM];
     memset(e, 0, STR_DIM);
+
+    fprintf(stdout, "Remove '%s'\n", path);
     if (unlink(path)) {
         errno = 0;
         switch (errno) {
@@ -234,11 +270,8 @@ FILE *open_file(char *path, char *file_name) {
     errno = 0;
     char s[strlen(path) + 1 + strlen(file_name)];
     memset(s, 0, (size_t) strlen(path) + 1 + strlen(file_name));
-    printf("Sono qui 1\n");
     sprintf(s, "%s/%s", path, file_name);
-    printf("Sono qui 1\n");
     FILE *f = fopen(s, "a");
-    printf("Sono qui 1\n");
     if (!f) {
         if (errno == EACCES) {
             error_found("Error in fopen: missing permission!");
@@ -272,22 +305,22 @@ char *get_time(void) {
     return s;
 }
 
-void alloc_res_img(struct image **i, char *path, int first_image) {
+void alloc_res_img(struct image_t **i, char *path) {
     char new_path[PATH_MAX], *img_name;
-    struct image *new_img;
+    struct image_t *new_img;
     struct stat buf;
 
-    new_img = malloc(sizeof(struct image));
+    new_img = malloc(sizeof(struct image_t));
     if (!new_img)
         error_found("Error in malloc\n");
-    memset(new_img, 0, sizeof(struct image));
+    memset(new_img, 0, sizeof(struct image_t));
 
     img_name = strrchr(path, '/');
     if (!img_name) {
         error_found("alloc_r_img: Error analyzing file");
     }
     else {
-        strcpy(new_img -> name, img_name++);
+        strcpy(new_img -> name, ++img_name);
     }
     memset(new_path, 0, PATH_MAX);
 
@@ -296,11 +329,11 @@ void alloc_res_img(struct image **i, char *path, int first_image) {
     new_img -> size_r = (size_t) buf.st_size;
     new_img -> img_c = NULL;
 
-    if (first_image) {
-        new_img->next_img = *i;
+    if (!*i) {
+        new_img -> next_img = *i;
         *i = new_img;
     } else {
-        new_img->next_img = (*i)->next_img;
-        (*i)->next_img = new_img;
+        new_img -> next_img = (*i) -> next_img;
+        (*i) -> next_img = new_img;
     }
 }
