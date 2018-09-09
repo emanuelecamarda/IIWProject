@@ -126,7 +126,7 @@ void manage_option(int argc, char **argv) {
                 if (errno != 0 || *e != '\0')
                     error_found("Error in strtol: Invalid number for number of image in cache!\n");
                 if (cache_size)
-                    CACHE_SIZE = cache_size;
+                    cache_space = cache_size;
                 else {
                     error_found("Error: number of image in cache must be an integer > 0 or -1 for infinite cache"
                                 " size!\n");
@@ -395,9 +395,6 @@ void html_create(void) {
         error_found("Error in malloc!\n");
     memset(html, 0, (size_t) size * STR_DIM * sizeof(char));
 
-    HTML[0] = malloc(sizeof(FILE) * 3);
-
-    HTML[0] = open_file(LOG_PATH, "main_page");
     sprintf(html, head, "WebServerProject", "Welcome", "Select an image below");
     size_t len_h = strlen(html), new_len_h;
 
@@ -440,20 +437,16 @@ void html_create(void) {
     k = html;
     k += strlen(html);
     strcpy(k, head);
-    writef(html, HTML[0]);
-    if (fclose(HTML[0]) != 0) {
-        error_found("Error in fclose!");
-    }
 
+    HTML[0] = malloc(sizeof(char) * strlen(html));
+    memset(HTML[0], (int) '\0', strlen(html));
+    sprintf(HTML[0], html, strlen(html));
 
     // create error page html
     // %s page's title; %s page's header; %s errror's description
     head = "<!DOCTYPE HTML PUBLIC \"-//IETF//DTD HTML 2.0//EN\"><html><head><title>%s</title>"
            "</head><body><h1>%s</h1><p>%s</p></body></html>\0";
     size_t  len = strlen(head) + 3 * STR_DIM * sizeof(char);
-
-    HTML[1] = open_file(LOG_PATH, "not_found");
-    HTML[2] = open_file(LOG_PATH, "bad_request");
 
     char *description1 = malloc(len);
     char *description2 = malloc(len);
@@ -463,14 +456,13 @@ void html_create(void) {
     memset(description2, 0, len);
     sprintf(description1, head, "404 Not Found", "404 Not Found", "Sorry, page not found on this server...");
     sprintf(description2, head, "400 Bad Request", "Bad Request", "Sorry, I don't understand your request...");
-    writef(description1, HTML[1]);
-    writef(description2, HTML[2]);
-    if (fclose(HTML[1]) != 0) {
-        error_found("Error in fclose!");
-    }
-    if (fclose(HTML[2]) != 0) {
-        error_found("Error in fclose!");
-    }
+
+    HTML[1] = malloc(sizeof(char) * strlen(description1));
+    HTML[2] = malloc(sizeof(char) * strlen(description2));
+    memset(HTML[1], (int) '\0', strlen(description1));
+    memset(HTML[2], (int) '\0', strlen(description2));
+    sprintf(HTML[1], description1, strlen(description1));
+    sprintf(HTML[2], description2, strlen(description2));
 }
 
 // Do Server work

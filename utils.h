@@ -13,6 +13,7 @@
 
 #define STR_DIM 1024
 #define PRINT_DUMP 1
+#define Q_FACTOR 70
 
 struct image_t {
     // Name of current image
@@ -111,10 +112,10 @@ extern char TMP_CACHE_PATH[PATH_MAX];
 extern int MIN_TH_NUM;
 extern int MAX_CONN_NUM;
 extern int RESIZE_PERC;
-extern int CACHE_SIZE;
+extern int cache_space;
 extern int LISTEN_SD;
 extern FILE *LOG;
-extern FILE *HTML[3];
+extern char *HTML[3];
 extern float TH_SCALING_UP;
 extern float TH_SCALING_DOWN;
 
@@ -136,4 +137,6 @@ FILE *open_file(char *path, char *file_name);
 void write_log(char *s);
 char *get_time(void);
 void alloc_res_img(struct image_t **i, char *path);
+char *get_img(char *name, size_t img_dim, char *directory);
+
 #endif //PROGETTO_UTILS_H

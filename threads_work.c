@@ -12,6 +12,7 @@
 #include <unistd.h>
 
 #include "utils.h"
+#include "server_http.h"
 
 void lock(pthread_mutex_t *mtx);
 void unlock(pthread_mutex_t *mtx);
@@ -254,8 +255,7 @@ void *manage_connection(void *arg) {
 
         th_scaling_up();
 
-        // TODO
-        // respond(conn_sd, cl_addr);
+        analyze_http_request(conn_sd, cl_addr);
 
         errno = 0;
         if (close(conn_sd) != 0) {

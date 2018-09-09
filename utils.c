@@ -36,10 +36,10 @@ char TMP_CACHE_PATH[PATH_MAX] = "/tmp/CACHE.XXXXXX";
 int MIN_TH_NUM = 10;
 int MAX_CONN_NUM = 100;
 int RESIZE_PERC = 50;
-int CACHE_SIZE = -1;
+int cache_space = -1;
 int LISTEN_SD;
 FILE *LOG;
-FILE *HTML[3];
+char *HTML[3];
 float TH_SCALING_UP = 3/4;
 float TH_SCALING_DOWN = 1/4;
 
@@ -90,7 +90,7 @@ void free_mem() {
     free(accept_conn_syn -> mtx);
     free(accept_conn_syn -> cond);
     free(accept_conn_syn -> cl_addr);
-    if (CACHE_SIZE >= 0 && cache_syn -> cache_hit_head && cache_syn -> cache_hit_tail) {
+    if (cache_space >= 0 && cache_syn -> cache_hit_head && cache_syn -> cache_hit_tail) {
         struct cache_hit *to_be_removed;
         while (cache_syn -> cache_hit_tail) {
             to_be_removed = cache_syn -> cache_hit_tail;
@@ -105,19 +105,13 @@ void free_mem() {
     rm_dir(TMP_RESIZED_PATH);
     rm_dir(TMP_CACHE_PATH);
     if (HTML[0] != NULL) {
-        sprintf(s, "%s/%s", LOG_PATH, "main_page");
-        rm_link(s);
-        memset(s, (int) '\0', STR_DIM);
+        free(&HTML[0]);
     }
     if (HTML[1] !=  NULL) {
-        sprintf(s, "%s/%s", LOG_PATH, "bad_request");
-        rm_link(s);
-        memset(s, (int) '\0', STR_DIM);
+        free(&HTML[1]);
     }
     if (HTML[2] != NULL) {
-        sprintf(s, "%s/%s", LOG_PATH, "not_found");
-        rm_link(s);
-        memset(s, (int) '\0', STR_DIM);
+        free(&HTML[2]);
     }
 }
 
@@ -336,4 +330,57 @@ void alloc_res_img(struct image_t **i, char *path) {
         new_img -> next_img = (*i) -> next_img;
         (*i) -> next_img = new_img;
     }
+}
+
+// Used to get image from file system
+char *get_img(char *name, size_t img_dim, char *directory) {
+    ssize_t left = 0;
+    int fd;
+    char *buf;
+    char path[strlen(name) + strlen(directory) + 1];
+    memset(path, (int) '\0', strlen(name) + strlen(directory) + 1);
+    sprintf(path, "%s/%s", directory, name);
+    if (path[strlen(path)] != '\0')
+        path[strlen(path)] = '\0';
+
+    errno = 0;
+    if ((fd = open(path, O_RDONLY)) == -1) {
+        switch (errno) {
+            case EACCES:
+                fprintf(stderr, "Error in get_img: Permission denied!\n");
+                break;
+
+            case EISDIR:
+                fprintf(stderr, "Error in get_img: '%s' is a directory!\n", name);
+                break;
+
+            case ENFILE:
+                fprintf(stderr, "Error in get_img: The maximum allowable number of files is currently open in "
+                                "the system!\n");
+                break;
+
+            case EMFILE:
+                fprintf(stderr, "Error in get_img: File descriptors are currently open in the calling process!\n");
+                break;
+
+            default:
+                fprintf(stderr, "Error in get_img!\n");
+                break;
+        }
+        return NULL;
+    }
+
+    errno = 0;
+    if (!(buf = malloc(img_dim))) {
+        fprintf(stderr, "Error in malloc:\t\terrno: %d\t\timg_dim: %d\n", errno, (int) img_dim);
+        return buf;
+    } else {
+        memset(buf, (int) '\0', img_dim);
+    }
+    while ((left = read(fd, buf + left, img_dim)))
+        img_dim -= left;
+    if (close(fd)) {
+        fprintf(stderr, "Error in close():\t\tFile Descriptor: %d\n", fd);
+    }
+    return buf;
 }

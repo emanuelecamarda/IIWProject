@@ -60,5 +60,5 @@ void init(int argc, char **argv) {
     if (PRINT_DUMP)
         printf("Port number: %d\nImages' path: %s\nLog file's path: %s\nMinimum threads' number: %d\n"
                "Maximum connection's number: %d\nResize images' percentage: %d\nCache size: %d\n", PORT, IMG_PATH,
-               LOG_PATH, MIN_TH_NUM, MAX_CONN_NUM, RESIZE_PERC, CACHE_SIZE);
+               LOG_PATH, MIN_TH_NUM, MAX_CONN_NUM, RESIZE_PERC, cache_space);
 }
