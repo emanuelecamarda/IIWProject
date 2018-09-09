@@ -10,6 +10,7 @@
 void init(int argc, char **argv);
 
 int main(int argc, char **argv) {
+
     init(argc, argv);
 
     server_work();
@@ -58,7 +59,8 @@ void init(int argc, char **argv) {
     if (PRINT_DUMP)
         printf("Finish th_init(MIN_TH_NUM)\n");
     if (PRINT_DUMP)
-        printf("Port number: %d\nImages' path: %s\nLog file's path: %s\nMinimum threads' number: %d\n"
-               "Maximum connection's number: %d\nResize images' percentage: %d\nCache size: %d\n", PORT, IMG_PATH,
-               LOG_PATH, MIN_TH_NUM, MAX_CONN_NUM, RESIZE_PERC, cache_space);
+        printf("\nPort number: %d\nImages' path: %s\nLog file's path: %s\nMinimum threads' number: %d\n"
+               "Maximum connection's number: %d\nResize images' percentage: %d\nCache size: %d\nScaling up: %d\n"
+               "Scaling down: %d\n", PORT, IMG_PATH, LOG_PATH, MIN_TH_NUM, MAX_CONN_NUM, RESIZE_PERC, cache_space,
+               TH_SCALING_UP, TH_SCALING_DOWN);
 }

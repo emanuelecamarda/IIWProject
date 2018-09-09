@@ -3,11 +3,16 @@
 //
 #include <sys/socket.h>
 #include <sys/time.h>
+#include <string.h>
+#include <errno.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <dirent.h>
 
 #include "utils.h"
 #include "server_http.h"
+#include "threads_work.h"
 
-//TODO
 void analyze_http_request(int conn_sd, struct sockaddr_in cl_addr) {
     char http_req[STR_DIM * STR_DIM];
     char *line_req[7];
@@ -72,7 +77,6 @@ void analyze_http_request(int conn_sd, struct sockaddr_in cl_addr) {
                     inet_ntoa(cl_addr.sin_addr), line_req[0], line_req[1], line_req[2]);
             write_log(log);
 
-            //TODO
             if (http_response(conn_sd, line_req))
                 break;
         }
@@ -140,6 +144,8 @@ int http_response(int conn_sd, char **line_req) {
 
     memset(http_resp, (int) '\0',STR_DIM * STR_DIM * 2);
 
+    printf("Sono qui 1\n");
+
     if (!line_req[0] || !line_req[1] || !line_req[2] ||
         ((strncmp(line_req[0], "GET", 3) && strncmp(line_req[0], "HEAD", 4)) ||
          (strncmp(line_req[2], "HTTP/1.1", 8) && strncmp(line_req[2], "HTTP/1.0", 8)))) {
@@ -155,6 +161,8 @@ int http_response(int conn_sd, char **line_req) {
         return 0;
     }
 
+    printf("Sono qui 2\n");
+
     if (strncmp(line_req[1], "/", strlen(line_req[1])) == 0) {
         sprintf(http_resp, header, 200, "OK", t, server, "text/html", strlen(HTML[0]), "keep-alive");
         if (strncmp(line_req[0], "HEAD", 4)) {
@@ -169,14 +177,14 @@ int http_response(int conn_sd, char **line_req) {
         }
     }
     else {
-        struct image *i = IMAGES;
+        struct image_t *i = IMAGES;
         char *p_name;
         if (!(p_name = strrchr(line_req[1], '/')))
             i = NULL;
         ++p_name;
         char *p = TMP_RESIZED_PATH + strlen("/tmp");
 
-        // Finding image in the image structure
+        // Finding image in the image_t structure
         while (i) {
             if (!strncmp(p_name, i->name, strlen(i->name))) {
                 ssize_t dim = 0;
@@ -400,7 +408,7 @@ int http_response(int conn_sd, char **line_req) {
                                 c = i -> img_c;
 
                                 // delete oldest request element from cache structure
-                                struct image *img_ptr = IMAGES;
+                                struct image_t *img_ptr = IMAGES;
                                 struct cache_t *cache_ptr, *cache_prev = NULL;
                                 char *ext = strrchr(cache_syn -> cache_hit_tail -> cache_name, '_');
                                 size_t dim_fin = strlen(ext);
@@ -605,7 +613,7 @@ ssize_t send_http_response(int conn_sd, char *s, ssize_t dim) {
     ssize_t sent = 0;
     char *msg = s;
     while (sent < dim) {
-        sent = send(sd, msg, (size_t) dim, MSG_NOSIGNAL);
+        sent = send(conn_sd, msg, (size_t) dim, MSG_NOSIGNAL);
         if (sent <= 0)
             break;
         msg += sent;

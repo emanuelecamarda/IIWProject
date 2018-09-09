@@ -39,7 +39,7 @@ void manage_signal(void) {
 
 // manage option passed by users with command line
 void manage_option(int argc, char **argv) {
-    int i, flag_n = 0, flag_m = 0, c;
+    int i, flag_n = 0, flag_m = 0, flag_u = 0, flag_d = 0, c;
     char *e;
 
     for (i = 0; i < argc; i++) {
@@ -49,7 +49,7 @@ void manage_option(int argc, char **argv) {
         }
     }
 
-    while ((c = getopt(argc, argv, "p:l:i:n:m:r:c:")) != -1) {
+    while ((c = getopt(argc, argv, "p:l:i:n:m:r:c:u:d:")) != -1) {
         switch (c) {
             case 'p':
                 errno = 0;
@@ -133,6 +133,28 @@ void manage_option(int argc, char **argv) {
                 }
                 break;
 
+            case 'u':
+                errno = 0;
+                int scaling_up = (int) strtol(optarg, &e, 10);
+                if (errno != 0 || *e != '\0')
+                    error_found("Error in strtol: Invalid number for scaling up!\n");
+                if (scaling_up <= 0 || scaling_up >= 100)
+                    error_found("Error: the scaling up must be an integer > 1 and < 100!\n");
+                TH_SCALING_UP = scaling_up;
+                flag_u = 1;
+                break;
+
+            case 'd':
+                errno = 0;
+                int scaling_down = (int) strtol(optarg, &e, 10);
+                if (errno != 0 || *e != '\0')
+                    error_found("Error in strtol: Invalid number for scaling down!\n");
+                if (scaling_down <= 0 || scaling_down >= 100)
+                    error_found("Error: the scaling down must be an integer > 1 and < 100!\n");
+                TH_SCALING_DOWN = scaling_down;
+                flag_d = 1;
+                break;
+
             case '?':
                 error_found("Error: Invalid argument option!\n");
                 break;
@@ -148,12 +170,24 @@ void manage_option(int argc, char **argv) {
         MIN_TH_NUM = MAX_CONN_NUM / 2;
     if (MIN_TH_NUM > MAX_CONN_NUM)
         error_found("Error: maximum number of threads is lower then minimum number of threads!\n");
+
+    if (flag_d && !flag_u && TH_SCALING_UP < TH_SCALING_DOWN)
+        TH_SCALING_UP = 2 * TH_SCALING_DOWN;
+    else if (!flag_d && flag_u && TH_SCALING_DOWN > TH_SCALING_UP)
+        TH_SCALING_DOWN = TH_SCALING_UP / 2;
+    if (TH_SCALING_DOWN > TH_SCALING_UP)
+        error_found("Error: scaling up is lower then scaling down!\n");
 }
 
 void struct_init(void) {
     pthread_mutex_t *cache_syn_mtx, *state_syn_mtx, *th_syn_mtx, *accept_conn_syn_mtx;
     pthread_cond_t *cache_syn_cond, *state_syn_cond, *th_syn_cond;
     int i;
+
+    accept_conn_syn = malloc(sizeof(struct accept_conn_syn_t));
+    if (!accept_conn_syn) {
+        error_found("Error in malloc!\n");
+    }
 
     cache_syn_mtx = malloc(sizeof(pthread_mutex_t));
     if (!cache_syn_mtx) {
@@ -163,6 +197,7 @@ void struct_init(void) {
     if (!cache_syn_cond) {
         error_found("Error in malloc!\n");
     }
+
     state_syn_mtx = malloc(sizeof(pthread_mutex_t));
     if (!state_syn_mtx) {
         error_found("Error in malloc!\n");
@@ -171,38 +206,47 @@ void struct_init(void) {
     if (!state_syn_cond) {
         error_found("Error in malloc!\n");
     }
+
     th_syn_mtx = malloc(sizeof(pthread_mutex_t));
-    if (th_syn_mtx) {
+    if (!th_syn_mtx) {
         error_found("Error in malloc!\n");
     }
     th_syn_cond = malloc(sizeof(pthread_cond_t));
     if (!th_syn_cond) {
         error_found("Error in malloc!\n");
     }
+
     accept_conn_syn_mtx = malloc(sizeof(pthread_mutex_t));
-    if (accept_conn_syn_mtx) {
+    if (!accept_conn_syn_mtx) {
         error_found("Error in malloc!\n");
     }
+
+
+    printf("Sono in server work 10\n");
+
+
     accept_conn_syn -> cond = malloc(sizeof(pthread_cond_t) * MAX_CONN_NUM);
     if (!accept_conn_syn -> cond) {
         error_found("Error in malloc!\n");
     }
+
+
+    printf("Sono in server work 10\n");
+
+
     cache_syn = malloc(sizeof(struct cache_syn_t));
     if (!cache_syn) {
         error_found("Error in malloc!\n");
     }
     state_syn = malloc(sizeof(struct state_syn_t));
-    if (state_syn) {
+    if (!state_syn) {
         error_found("Error in malloc!\n");
     }
     th_syn = malloc(sizeof(struct th_syn_t));
-    if (th_syn) {
+    if (!th_syn) {
         error_found("Error in malloc!\n");
     }
-    accept_conn_syn = malloc(sizeof(struct accept_conn_syn_t));
-    if (accept_conn_syn) {
-        error_found("Error in malloc!\n");
-    }
+
 
     if (pthread_mutex_init(cache_syn_mtx, NULL) != 0 ||
         pthread_mutex_init(state_syn_mtx, NULL) != 0 ||
@@ -224,7 +268,7 @@ void struct_init(void) {
     th_syn -> cond = th_syn_cond;
     accept_conn_syn -> mtx = accept_conn_syn_mtx;
     accept_conn_syn -> conn_sd = -1;
-    state_syn -> conn_num = th_syn -> to_kill = state_syn -> init_th_num = 0;
+    state_syn -> conn_num = state_syn -> init_th_num = 0;
     IMAGES = NULL;
 
     accept_conn_syn -> cl_addr = malloc(sizeof(struct sockaddr_in));
@@ -238,6 +282,7 @@ void struct_init(void) {
     } else {
         memset(th_syn -> clients, 0, sizeof(int) * MAX_CONN_NUM);
     }
+
     // -1 := slot with thread initialized; -2 := empty slot
     for (i = 0; i < MAX_CONN_NUM; ++i) {
         th_syn -> clients[i] = -2;
@@ -398,8 +443,6 @@ void html_create(void) {
     sprintf(html, head, "WebServerProject", "Welcome", "Select an image below");
     size_t len_h = strlen(html), new_len_h;
 
-    printf("html main page: %s\n", html);
-
     while (1) {
         if (!i)
             break;
@@ -421,7 +464,6 @@ void html_create(void) {
         i = i -> next_img;
     }
 
-    printf("html main page: %s\n", html);
     new_len_h = strlen(html);
     if (len_h == new_len_h)
         error_found("Error: there aren't images to resize!\n");
@@ -471,7 +513,7 @@ void server_work(void) {
     struct sockaddr_in cl_addr;
     socklen_t addr_size = sizeof(struct sockaddr_in);
 
-    fprintf(stdout, "\n\n\nWaiting for incoming connection...\n");
+    fprintf(stdout, "\n\nWaiting for incoming connection...\n");
     // Accept connections
     while (1) {
         // check MAX_CONN_NUM
@@ -481,9 +523,13 @@ void server_work(void) {
             }
         } unlock(state_syn -> mtx);
 
+        printf("Sono in server work 1\n");
+
         memset(&cl_addr, (int) '\0', addr_size);
         errno = 0;
         conn_sd = accept(LISTEN_SD, (struct sockaddr *) &cl_addr, &addr_size);
+
+        printf("Sono in server work 2\n");
 
         lock(th_syn -> mtx); {
             if (conn_sd == -1) {
@@ -540,6 +586,8 @@ void server_work(void) {
                 }
             }
 
+            printf("Sono in server work 3\n");
+
             //printf("\nNUM CONN: %d\t\tTH_ACT: %d\t\tTH_THR: %d\n\n", k -> connections, k -> th_act, k -> th_act_thr);
             j = 1;
             while (th_syn -> clients[i] != -1) {
@@ -550,6 +598,9 @@ void server_work(void) {
                 i = (i + 1) % MAX_CONN_NUM;
                 j++;
             }
+
+            printf("Sono in server work 4\n");
+
             // MAX_CONN_NUM
             if (j == -1) {
                 unlock(th_syn -> mtx);
@@ -557,16 +608,43 @@ void server_work(void) {
             }
             th_syn -> clients[i] = conn_sd;
             lock(accept_conn_syn -> mtx); {
-                while (accept_conn_syn -> conn_sd != -1)
-                    wait_cond(accept_conn_syn -> cond + i, accept_conn_syn -> mtx);
+                while (accept_conn_syn -> conn_sd != -1) {
+                    printf("BELLLAAAAAA|N\n");
+                    wait_cond(&accept_conn_syn->cond[i], accept_conn_syn->mtx);
+                }
+
+                printf("Sono in server work 5\n");
+
                 memset(accept_conn_syn -> cl_addr, (int) '\0', addr_size);
+
+                printf("Sono in server work 6\n");
+
                 memcpy(accept_conn_syn -> cl_addr, &cl_addr, addr_size);
+
+                printf("Sono in server work 7\n");
+
                 accept_conn_syn -> conn_sd = conn_sd;
+
+                printf("Sono in server work 8\n");
+
                 signal_cond(accept_conn_syn -> cond + i);
-                while (accept_conn_syn -> conn_sd != -1)
-                    wait_cond(accept_conn_syn -> cond + i, accept_conn_syn -> mtx);
+
+                printf("Sono in server work 9\n");
+
+                while (accept_conn_syn -> conn_sd != -1) {
+                    wait_cond(&accept_conn_syn->cond[i], accept_conn_syn -> mtx);
+                }
+
+                printf("Sono in server work 10\n");
+
             } unlock(accept_conn_syn -> mtx);
+
+            printf("Sono in server work 10\n");
+
             i = (i + 1) % MAX_CONN_NUM;
+
+            printf("Sono in server work 10\n");
+
         } unlock(th_syn -> mtx);
     }
 }

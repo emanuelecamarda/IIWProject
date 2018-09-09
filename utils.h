@@ -38,39 +38,6 @@ struct cache_hit {
     struct cache_hit *next_hit;
 };
 
-// Struct which contains all variables for synchronise threads
-struct th_sync {
-    struct sockaddr_in client_addr;
-    struct cache_hit *cache_hit_tail,
-            *cache_hit_head;
-    // rappresent the state of a threads associated to a connection:
-    // >0 -> socket value
-    // -1 -> thread ready for incoming connections
-    // -2 -> thread killed by kill_th function or thread not yet created
-    // -3 -> newly created thread to be initialized
-    int *clients;
-    // used to tell to a thread it's slot clients
-    volatile int slot_c,
-            // number of clients connected
-            connections,
-            // number of thread active
-            th_act,
-            th_act_thr,
-            to_kill;
-    // To manage thread's number and connections (th_act and connections)
-    pthread_mutex_t *mutex_th_num;
-    // To manage cache access
-    pthread_mutex_t *mutex_cache;
-    // To sync pthread_condition variables
-    pthread_mutex_t *mutex_cond;
-    // variables of all threads, array containing condition
-    pthread_cond_t *new_c;
-    // To initialize threads
-    pthread_cond_t *cond_th_init;
-    // Number of maximum connection reached
-    pthread_cond_t *cond_max_conn;
-};
-
 // struct to syn access on cache's resource 
 struct cache_syn_t {
     pthread_mutex_t *mtx;
@@ -91,7 +58,6 @@ struct th_syn_t {
     pthread_mutex_t *mtx;
     pthread_cond_t *cond;
     int *clients;
-    volatile int to_kill;
 };
 
 struct accept_conn_syn_t {
@@ -116,8 +82,8 @@ extern int cache_space;
 extern int LISTEN_SD;
 extern FILE *LOG;
 extern char *HTML[3];
-extern float TH_SCALING_UP;
-extern float TH_SCALING_DOWN;
+extern int TH_SCALING_UP;
+extern int TH_SCALING_DOWN;
 
 extern struct image_t *IMAGES;
 extern struct cache_t *cache;

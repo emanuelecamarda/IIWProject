@@ -11,6 +11,7 @@
 #include <unistd.h>
 #include <time.h>
 #include <pthread.h>
+#include <fcntl.h>
 
 #include "utils.h"
 
@@ -22,26 +23,28 @@ char *USAGE_MSG =
         "\t-i image directory's path, default: current directory.\n"
         "\t-l log file directory's path, default: current directory.\n"
         "\t-n initial thread number, default value: 10.\n"
-        "\t-m maximum connection number, default value: 100.\n"
+        "\t-m maximum connection number, default value: 800.\n"
         "\t-r resize images' percentage, default value: 50.\n"
         "\t-c maximum number of image in cache, default value: -1 (infinite).\n"
+        "\t-u scaling up factor of threads, default value: 75\n"
+        "\t-d scaling down factor of threads, default value: 25\n"
         "\t-h help\n\n";
 char *USER_OPT =
         "Press q or Q to close the server\n"
-        "Press s or S to show the server's state";
+        "Press s or S to show the server's state\n";
 char LOG_PATH[PATH_MAX];
 char IMG_PATH[PATH_MAX];
 char TMP_RESIZED_PATH[PATH_MAX] = "/tmp/RESIZED.XXXXXX";
 char TMP_CACHE_PATH[PATH_MAX] = "/tmp/CACHE.XXXXXX";
 int MIN_TH_NUM = 10;
-int MAX_CONN_NUM = 100;
+int MAX_CONN_NUM = 800;
 int RESIZE_PERC = 50;
 int cache_space = -1;
 int LISTEN_SD;
 FILE *LOG;
 char *HTML[3];
-float TH_SCALING_UP = 3/4;
-float TH_SCALING_DOWN = 1/4;
+int TH_SCALING_UP = 75;
+int TH_SCALING_DOWN = 25;
 
 struct image_t *IMAGES;
 struct cache_t *cache;
@@ -104,15 +107,6 @@ void free_mem() {
     free(accept_conn_syn);
     rm_dir(TMP_RESIZED_PATH);
     rm_dir(TMP_CACHE_PATH);
-    if (HTML[0] != NULL) {
-        free(&HTML[0]);
-    }
-    if (HTML[1] !=  NULL) {
-        free(&HTML[1]);
-    }
-    if (HTML[2] != NULL) {
-        free(&HTML[2]);
-    }
 }
 
 // Used to remove directory from file system
