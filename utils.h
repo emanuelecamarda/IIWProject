@@ -75,8 +75,8 @@ struct th_sync {
 struct cache_syn_t {
     pthread_mutex_t *mtx;
     pthread_cond_t *cond;
-    struct cache_hit    *cache_hit_tail,
-                        *cache_hit_head;
+    struct cache_hit    *cache_hit_tail, // oldest cache hit
+                        *cache_hit_head; // last cache hit
 };
 
 //

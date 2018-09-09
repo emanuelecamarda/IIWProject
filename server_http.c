@@ -197,7 +197,7 @@ int http_response(int conn_sd, char **line_req) {
                     // Looking for image in memory cache
                     char name_cached_img[STR_DIM];
                     memset(name_cached_img, (int) '\0', sizeof(char) * STR_DIM);
-                    struct cache *c;
+                    struct cache_t *c;
                     int accept = q_factor(line_req[5]);
                     if (accept == -1)
                         fprintf(stderr, "Eerror in strtod!\n");
@@ -279,7 +279,7 @@ int http_response(int conn_sd, char **line_req) {
                                     return -1;
                                 }
 
-                                struct cache *new_entry = malloc(sizeof(struct cache));
+                                struct cache_t *new_entry = malloc(sizeof(struct cache_t));
                                 struct cache_hit *new_hit = malloc(sizeof(struct cache_hit));
                                 if (!new_entry || !new_hit) {
                                     fprintf(stderr, "Error in malloc!\n");
@@ -287,7 +287,7 @@ int http_response(int conn_sd, char **line_req) {
                                     unlock(cache_syn -> mtx);
                                     return -1;
                                 }
-                                memset(new_entry, (int) '\0', sizeof(struct cache));
+                                memset(new_entry, (int) '\0', sizeof(struct cache_t));
                                 memset(new_hit, (int) '\0', sizeof(struct cache_hit));
                                 
                                 new_entry -> q = q;
@@ -311,8 +311,10 @@ int http_response(int conn_sd, char **line_req) {
                                 // Cache full. Deleting the oldest requested element.
                                 char name_to_remove[STR_DIM];
                                 memset(name_to_remove, (int) '\0', STR_DIM);
-                                sprintf(name_to_remove, "%s/%s", TMP_CACHE_PATH, cache_syn -> cache_hit_tail -> cache_name);
+                                sprintf(name_to_remove, "%s/%s", TMP_CACHE_PATH,
+                                        cache_syn -> cache_hit_tail -> cache_name);
 
+                                // delete old image from file system
                                 DIR *dir;
                                 struct dirent *ent;
                                 errno = 0;
@@ -339,7 +341,7 @@ int http_response(int conn_sd, char **line_req) {
                                     }
                                 }
                                 if (!ent) {
-                                    fprintf(stderr, "File: '%s' not removed\n", name_to_remove);
+                                    fprintf(stderr, "Error in http_response: file '%s' not removed\n", name_to_remove);
                                 }
                                 if (closedir(dir)) {
                                     fprintf(stderr, "Error in closedir!\n");
@@ -348,13 +350,15 @@ int http_response(int conn_sd, char **line_req) {
                                     unlock(cache_syn -> mtx);
                                     return -1;
                                 }
+
+                                // resizing new image to insert in cache
                                 // %s/%s = path/name_image; %d = factor quality; %s/%s = path/name_image;
                                 char *format = "convert %s/%s -quality %d %s/%s;exit";
                                 char command[STR_DIM];
                                 memset(command, (int) '\0', STR_DIM);
                                 sprintf(command, format, IMG_PATH, p_name, q, TMP_CACHE_PATH, name_cached_img);
                                 if (system(command)) {
-                                    fprintf(stderr, "Error in http_response: cannot refactoring image!\n");
+                                    fprintf(stderr, "Error in http_response: cannot resizing image!\n");
                                     free_http_mem(t, http_resp);
                                     unlock(cache_syn -> mtx);
                                     return -1;
@@ -379,15 +383,15 @@ int http_response(int conn_sd, char **line_req) {
                                     unlock(cache_syn -> mtx);
                                     return -1;
                                 }
-                                struct cache *new_entry = malloc(sizeof(struct cache));
+                                // insert new image in cache
+                                struct cache_t *new_entry = malloc(sizeof(struct cache_t));
                                 if (!new_entry) {
                                     fprintf(stderr, "Error in malloc!\n");
                                     free_http_mem(t, http_resp);
                                     unlock(cache_syn -> mtx);
                                     return -1;
                                 }
-                                memset(new_entry, (int) '\0', sizeof(struct cache));
-
+                                memset(new_entry, (int) '\0', sizeof(struct cache_t));
                                 new_entry -> q = q;
                                 strcpy(new_entry -> img_q, name_cached_img);
                                 new_entry -> size_q = (size_t) buf.st_size;
@@ -395,17 +399,17 @@ int http_response(int conn_sd, char **line_req) {
                                 i -> img_c = new_entry;
                                 c = i -> img_c;
 
-                                // To find and delete oldest request element from cache structure
-                                struct image *img_ptr = img;
-                                struct cache *cache_ptr, *cache_prev = NULL;
+                                // delete oldest request element from cache structure
+                                struct image *img_ptr = IMAGES;
+                                struct cache_t *cache_ptr, *cache_prev = NULL;
                                 char *ext = strrchr(cache_syn -> cache_hit_tail -> cache_name, '_');
                                 size_t dim_fin = strlen(ext);
-                                char name_i[STR_DIM];
-                                memset(name_i, (int) '\0', STR_DIM);
-                                strncpy(name_i, cache_syn -> cache_hit_tail -> cache_name,
+                                char name_remove[STR_DIM];
+                                memset(name_remove, (int) '\0', STR_DIM);
+                                strncpy(name_remove, cache_syn -> cache_hit_tail -> cache_name,
                                         strlen(cache_syn -> cache_hit_tail -> cache_name) - dim_fin);
                                 while (img_ptr) {
-                                    if (!strncmp(img_ptr -> name, name_i, strlen(name_i))) {
+                                    if (!strncmp(img_ptr -> name, name_remove, strlen(name_remove))) {
                                         cache_ptr = img_ptr -> img_c;
                                         while (cache_ptr) {
                                             if (!strncmp(cache_ptr -> img_q, cache_syn -> cache_hit_tail -> cache_name,
@@ -421,9 +425,9 @@ int http_response(int conn_sd, char **line_req) {
                                             cache_ptr = cache_ptr -> next_img_c;
                                         }
                                         if (!cache_ptr) {
-                                            fprintf(stderr, "Error! struct cache compromised\n"
+                                            fprintf(stderr, "Error! struct cache_t compromised\n"
                                                             "Cache size automatically set to Unlimited\n\t\tfinding: %s\n",
-                                                    name_i);
+                                                    name_remove);
                                             free_http_mem(t, http_resp);
                                             cache_space = -1;
                                             unlock(cache_syn -> mtx);
@@ -437,7 +441,7 @@ int http_response(int conn_sd, char **line_req) {
                                     cache_space = -1;
                                     fprintf(stderr,
                                             "Error in http_response:\n"
-                                            "Cache size automatically set to Unlimited\n\t\tfinding: %s\n", name_i);
+                                            "Cache size automatically set to Unlimited\n\t\tfinding: %s\n", name_remove);
                                     free_http_mem(t, http_resp);
                                     unlock(cache_syn -> mtx);
                                     return -1;
@@ -458,18 +462,17 @@ int http_response(int conn_sd, char **line_req) {
                                 cache_syn -> cache_hit_head = cache_syn -> cache_hit_head -> next_hit;
                                 cache_syn -> cache_hit_tail = cache_syn -> cache_hit_tail -> next_hit;
                                 free(to_be_removed);
-                                // TODO
                             } else {
                                 // Case of unlimited cache
-                                // %s/%s = path/name_image; %d = factor quality
+                                // %s/%s = path/name_image; %d = factor quality: %s/%s = path/name_image;
                                 char *format = "convert %s/%s -quality %d %s/%s;exit";
                                 char command[STR_DIM];
                                 memset(command, (int) '\0', STR_DIM);
                                 sprintf(command, format, IMG_PATH, p_name, q, TMP_CACHE_PATH, name_cached_img);
                                 if (system(command)) {
-                                    fprintf(stderr, "data_to_send: Unexpected error while refactoring image\n");
+                                    fprintf(stderr, "Error in http_response: cannot resizing image!\n");
                                     free_http_mem(t, http_resp);
-                                    unlock(thds.mtx_c);
+                                    unlock(cache_syn -> mtx);
                                     return -1;
                                 }
 
@@ -478,36 +481,36 @@ int http_response(int conn_sd, char **line_req) {
                                 errno = 0;
                                 if (stat(path, &buf) != 0) {
                                     if (errno == ENAMETOOLONG) {
-                                        fprintf(stderr, "Path too long\n");
+                                        fprintf(stderr, "Error in stat(): path too long!\n");
                                         free_http_mem(t, http_resp);
-                                        unlock(thds.mtx_c);
+                                        unlock(cache_syn -> mtx);
                                         return -1;
                                     }
-                                    fprintf(stderr, "data_to_send: Invalid path\n");
+                                    fprintf(stderr, "Error in stat(): invalid path!\n");
                                     free_http_mem(t, http_resp);
-                                    unlock(thds.mtx_c);
+                                    unlock(cache_syn -> mtx);
                                     return -1;
                                 } else if (!S_ISREG(buf.st_mode)) {
-                                    fprintf(stderr, "Non-regular files can not be analysed!\n");
+                                    fprintf(stderr, "Error in http_response: non-regular files can not be analysed!\n");
                                     free_http_mem(t, http_resp);
-                                    unlock(thds.mtx_c);
+                                    unlock(cache_syn -> mtx);
                                     return -1;
                                 }
 
-                                struct cache *new_entry = malloc(sizeof(struct cache));
-                                memset(new_entry, (int) '\0', sizeof(struct cache));
+                                struct cache_t *new_entry = malloc(sizeof(struct cache_t));
+                                memset(new_entry, (int) '\0', sizeof(struct cache_t));
                                 if (!new_entry) {
-                                    fprintf(stderr, "data_to_send: Error in malloc\n");
+                                    fprintf(stderr, "Error in malloc!\n");
                                     free_http_mem(t, http_resp);
-                                    unlock(thds.mtx_c);
+                                    unlock(cache_syn -> mtx);
                                     return -1;
                                 }
-                                new_entry->q = q;
-                                strcpy(new_entry->img_q, name_cached_img);
-                                new_entry->size_q = (size_t) buf.st_size;
-                                new_entry->next_img_c = i->img_c;
-                                i->img_c = new_entry;
-                                c = i->img_c;
+                                new_entry -> q = q;
+                                strcpy(new_entry -> img_q, name_cached_img);
+                                new_entry -> size_q = (size_t) buf.st_size;
+                                new_entry -> next_img_c = i -> img_c;
+                                i -> img_c = new_entry;
+                                c = i -> img_c;
                             }
                         }
                     } unlock(cache_syn -> mtx);
@@ -519,21 +522,20 @@ int http_response(int conn_sd, char **line_req) {
                         dir = opendir(TMP_CACHE_PATH);
                         if (!dir) {
                             if (errno == EACCES) {
-                                fprintf(stderr, "data_to_send: Error in opendir: Permission denied\n");
+                                fprintf(stderr, "Error in opendir: permission denied!\n");
                                 free_http_mem(t, http_resp);
                                 return -1;
                             }
-                            fprintf(stderr, "data_to_send: Error in opendir\n");
+                            fprintf(stderr, "Error in opendir()!\n");
                             free_http_mem(t, http_resp);
                             return -1;
                         }
-
                         while ((ent = readdir(dir)) != NULL) {
-                            if (ent->d_type == DT_REG) {
-                                if (!strncmp(ent->d_name, name_cached_img, strlen(name_cached_img))) {
-                                    img_to_send = get_img(name_cached_img, c->size_q, TMP_CACHE_PATH);
+                            if (ent -> d_type == DT_REG) {
+                                if (!strncmp(ent -> d_name, name_cached_img, strlen(name_cached_img))) {
+                                    img_to_send = get_img(name_cached_img, c -> size_q, TMP_CACHE_PATH);
                                     if (!img_to_send) {
-                                        fprintf(stderr, "data_to_send: Error in get_img\n");
+                                        fprintf(stderr, "Error in get_img()!\n");
                                         free_http_mem(t, http_resp);
                                         return -1;
                                     }
@@ -541,7 +543,6 @@ int http_response(int conn_sd, char **line_req) {
                                 }
                             }
                         }
-
                         if (closedir(dir)) {
                             fprintf(stderr, "data_to_send: Error in closedir\n");
                             free(img_to_send);
@@ -549,7 +550,7 @@ int http_response(int conn_sd, char **line_req) {
                             return -1;
                         }
                     }
-                    dim = c->size_q;
+                    dim = c -> size_q;
                 }
 
                 sprintf(http_resp, header, 200, "OK", t, server, "image/gif", dim, "keep-alive");
@@ -558,7 +559,7 @@ int http_response(int conn_sd, char **line_req) {
                     if (dim_tot + dim > STR_DIM * STR_DIM * 2) {
                         http_resp = realloc(http_resp, (dim_tot + dim) * sizeof(char));
                         if (!http_resp) {
-                            fprintf(stderr, "data_to_send: Error in realloc\n");
+                            fprintf(stderr, "Error in realloc!\n");
                             free_http_mem(t, http_resp);
                             free(img_to_send);
                             return -1;
@@ -571,15 +572,14 @@ int http_response(int conn_sd, char **line_req) {
                     dim_tot += dim;
                 }
                 if (send_http_response(conn_sd, http_resp, dim_tot) == -1) {
-                    fprintf(stderr, "data_to_send: Error while sending data to client\n");
+                    fprintf(stderr, "Error in http_response: cannot sending data to client!\n");
                     free_http_mem(t, http_resp);
                     return -1;
                 }
-
                 free(img_to_send);
                 break;
             }
-            i = i->next_img;
+            i = i -> next_img;
         }
 
         if (!i) {
