@@ -12,7 +12,7 @@
 #include <arpa/inet.h>
 
 #define STR_DIM 1024
-#define PRINT_DUMP 1
+#define PRINT_DUMP 0
 #define Q_FACTOR 70
 
 struct image_t {
@@ -56,7 +56,9 @@ struct state_syn_t {
 
 struct th_syn_t {
     pthread_mutex_t *mtx;
+    // array of cond with size MAX_CONN_NUM
     pthread_cond_t *cond;
+    struct sockaddr_in *cl_addr;
     int *clients;
 };
 

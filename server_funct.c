@@ -221,18 +221,10 @@ void struct_init(void) {
         error_found("Error in malloc!\n");
     }
 
-
-    printf("Sono in server work 10\n");
-
-
     accept_conn_syn -> cond = malloc(sizeof(pthread_cond_t) * MAX_CONN_NUM);
     if (!accept_conn_syn -> cond) {
         error_found("Error in malloc!\n");
     }
-
-
-    printf("Sono in server work 10\n");
-
 
     cache_syn = malloc(sizeof(struct cache_syn_t));
     if (!cache_syn) {
@@ -513,7 +505,7 @@ void server_work(void) {
     struct sockaddr_in cl_addr;
     socklen_t addr_size = sizeof(struct sockaddr_in);
 
-    fprintf(stdout, "\n\nWaiting for incoming connection...\n");
+    fprintf(stdout, "\nWaiting for incoming connection...\n");
     // Accept connections
     while (1) {
         // check MAX_CONN_NUM
@@ -522,22 +514,16 @@ void server_work(void) {
                 wait_cond(state_syn -> cond, state_syn -> mtx);
             }
         } unlock(state_syn -> mtx);
-
-        printf("Sono in server work 1\n");
-
         memset(&cl_addr, (int) '\0', addr_size);
         errno = 0;
         conn_sd = accept(LISTEN_SD, (struct sockaddr *) &cl_addr, &addr_size);
-
-        printf("Sono in server work 2\n");
-
         lock(th_syn -> mtx); {
             if (conn_sd == -1) {
                 switch (errno) {
                     case ECONNABORTED:
                         fprintf(stderr, "Error in accept(): connection has been aborted!\n");
                         unlock(th_syn->mtx);
-                        break;
+                        continue;
 
                     case ENOBUFS:
                         error_found("Error in accept(): not enough free memory!\n");
@@ -555,38 +541,35 @@ void server_work(void) {
                             while (old_conn_num >= state_syn->conn_num) {
                                 wait_cond(state_syn->cond, state_syn->mtx);
                             }
-                            unlock(state_syn->mtx);
-                            unlock(th_syn->mtx);
-                            break;
+                        } unlock(state_syn->mtx);
+                        unlock(th_syn->mtx);
+                        continue;
 
-                            case EPROTO:
-                                fprintf(stderr, "Error in accept(): protocol error!\n");
-                            unlock(th_syn->mtx);
-                            break;
+                    case EPROTO:
+                        fprintf(stderr, "Error in accept(): protocol error!\n");
+                        unlock(th_syn->mtx);
+                        continue;
 
-                            case EPERM:
-                                fprintf(stderr, "Error in accept(): firewall rules forbid connection!\n");
-                            unlock(th_syn->mtx);
-                            break;
+                    case EPERM:
+                        fprintf(stderr, "Error in accept(): firewall rules forbid connection!\n");
+                        unlock(th_syn->mtx);
+                        continue;
 
-                            case ETIMEDOUT:
-                                fprintf(stderr, "Error in accept(): timeout occure!\n");
-                            unlock(th_syn->mtx);
-                            break;
+                    case ETIMEDOUT:
+                        fprintf(stderr, "Error in accept(): timeout occure!\n");
+                        unlock(th_syn->mtx);
+                        continue;
 
-                            case EBADF:
-                                fprintf(stderr, "Error in accept(): bad file number!\n");
-                            unlock(th_syn->mtx);
-                            break;
+                    case EBADF:
+                        fprintf(stderr, "Error in accept(): bad file number!\n");
+                        unlock(th_syn->mtx);
+                        continue;
 
-                            default:
-                                error_found("Error in accept()!\n");
-                            break;
-                        }
+                    default:
+                        error_found("Error in accept()!\n");
+                        break;
                 }
             }
-
-            printf("Sono in server work 3\n");
 
             //printf("\nNUM CONN: %d\t\tTH_ACT: %d\t\tTH_THR: %d\n\n", k -> connections, k -> th_act, k -> th_act_thr);
             j = 1;
@@ -599,52 +582,27 @@ void server_work(void) {
                 j++;
             }
 
-            printf("Sono in server work 4\n");
-
             // MAX_CONN_NUM
             if (j == -1) {
                 unlock(th_syn -> mtx);
                 continue;
             }
+
             th_syn -> clients[i] = conn_sd;
             lock(accept_conn_syn -> mtx); {
                 while (accept_conn_syn -> conn_sd != -1) {
-                    printf("BELLLAAAAAA|N\n");
                     wait_cond(&accept_conn_syn->cond[i], accept_conn_syn->mtx);
                 }
 
-                printf("Sono in server work 5\n");
-
                 memset(accept_conn_syn -> cl_addr, (int) '\0', addr_size);
-
-                printf("Sono in server work 6\n");
-
                 memcpy(accept_conn_syn -> cl_addr, &cl_addr, addr_size);
-
-                printf("Sono in server work 7\n");
-
                 accept_conn_syn -> conn_sd = conn_sd;
-
-                printf("Sono in server work 8\n");
-
                 signal_cond(accept_conn_syn -> cond + i);
-
-                printf("Sono in server work 9\n");
-
                 while (accept_conn_syn -> conn_sd != -1) {
                     wait_cond(&accept_conn_syn->cond[i], accept_conn_syn -> mtx);
                 }
-
-                printf("Sono in server work 10\n");
-
             } unlock(accept_conn_syn -> mtx);
-
-            printf("Sono in server work 10\n");
-
             i = (i + 1) % MAX_CONN_NUM;
-
-            printf("Sono in server work 10\n");
-
         } unlock(th_syn -> mtx);
     }
 }

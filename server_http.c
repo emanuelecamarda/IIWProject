@@ -144,8 +144,6 @@ int http_response(int conn_sd, char **line_req) {
 
     memset(http_resp, (int) '\0',STR_DIM * STR_DIM * 2);
 
-    printf("Sono qui 1\n");
-
     if (!line_req[0] || !line_req[1] || !line_req[2] ||
         ((strncmp(line_req[0], "GET", 3) && strncmp(line_req[0], "HEAD", 4)) ||
          (strncmp(line_req[2], "HTTP/1.1", 8) && strncmp(line_req[2], "HTTP/1.0", 8)))) {
@@ -160,8 +158,6 @@ int http_response(int conn_sd, char **line_req) {
         }
         return 0;
     }
-
-    printf("Sono qui 2\n");
 
     if (strncmp(line_req[1], "/", strlen(line_req[1])) == 0) {
         sprintf(http_resp, header, 200, "OK", t, server, "text/html", strlen(HTML[0]), "keep-alive");

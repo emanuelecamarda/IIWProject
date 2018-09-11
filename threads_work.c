@@ -13,13 +13,7 @@
 
 #include "utils.h"
 #include "server_http.h"
-
-void lock(pthread_mutex_t *mtx);
-void unlock(pthread_mutex_t *mtx);
-void wait_cond(pthread_cond_t *cond, pthread_mutex_t *mtx);
-void signal_cond(pthread_cond_t *cond);
-void *manage_input(void *arg);
-void *manage_connection(void *arg);
+#include "threads_work.h"
 
 void create_th(void * (*work) (void *), void *k) {
     pthread_t tid;
@@ -86,12 +80,8 @@ void unlock(pthread_mutex_t *mtx) {
 
 // Used to block a thread on a condition locked by a mutex
 void wait_cond(pthread_cond_t *cond, pthread_mutex_t *mtx) {
-    printf("Sono in wait_cond 1\n");
     if (pthread_cond_wait(cond, mtx) != 0)
         error_found("Error in pthread_cond_wait!\n");
-
-    printf("Sono in wait_cond 2\n");
-
 }
 
 // Used to send a signal for a condition
@@ -103,22 +93,23 @@ void signal_cond(pthread_cond_t *cond) {
 // use to create new thread if necessary
 void th_scaling_up(void) {
     lock(state_syn -> mtx);
-    {
-        if (state_syn -> conn_num / state_syn -> init_th_num * 100 >  TH_SCALING_UP) {
-            int n, i;
-            if (state_syn -> init_th_num + MIN_TH_NUM <= MAX_CONN_NUM) {
-                n = MIN_TH_NUM;
-            } else {
-                n = MAX_CONN_NUM - state_syn -> init_th_num;
-            }
-            if (n) {
-                for (i = 0; i < n; i++) {
-                    th_init(&n);
-                }
-                state_syn -> init_th_num += n;
-            }
+    if (state_syn -> conn_num / state_syn -> init_th_num * 100 >  TH_SCALING_UP) {
+        int n, i;
+        if (state_syn -> init_th_num + MIN_TH_NUM <= MAX_CONN_NUM) {
+            n = MIN_TH_NUM;
+        } else {
+            n = MAX_CONN_NUM - state_syn -> init_th_num;
         }
-    } unlock(state_syn -> mtx);
+        if (n) {
+            state_syn -> init_th_num += n;
+            unlock(state_syn -> mtx);
+            for (i = 0; i < n; i++) {
+                th_init(&n);
+            }
+        } else {
+            unlock(state_syn->mtx);
+        }
+    }
 }
 
 // Used to kill threads if necessary
@@ -224,21 +215,13 @@ void *manage_connection(void *arg) {
     struct sockaddr_in cl_addr;
     int *my_index = malloc(sizeof(int)), conn_sd;
     *my_index = * (int *) arg;
-
-    printf("my index: %d\n", *my_index);
-
     if (pthread_detach(pthread_self()) != 0)
         error_found("Error in pthread_detach!\n");
-
-    printf("Sono in manage connection 1\n");
 
     lock(th_syn -> mtx);
     {
         // Thread ready for incoming connections
         th_syn -> clients[*my_index] = -1;
-
-        printf("my index: %d\n", *my_index);
-
         lock(state_syn -> mtx);
         {
             state_syn -> init_th_num++;
@@ -248,47 +231,28 @@ void *manage_connection(void *arg) {
 
     // Deal connections
     while (1) {
-
-        printf("Sono in manage connection 2\n");
-
         memset(&cl_addr, (int) '\0', sizeof(struct sockaddr_in));
         lock(accept_conn_syn -> mtx); {
             wait_cond(accept_conn_syn -> cond + *my_index, accept_conn_syn -> mtx);
-
-            printf("my index: %d\n", *my_index);
-
-            printf("Sono in manage connection 3\n");
-
             conn_sd = accept_conn_syn -> conn_sd;
             if (conn_sd == -2) {
                 accept_conn_syn -> conn_sd = -1;
                 unlock(accept_conn_syn -> mtx);
                 break;
             }
-
-            printf("Sono in manage connection 4\n");
-
             memcpy(&cl_addr, &accept_conn_syn -> cl_addr, sizeof(struct sockaddr_in));
-
-            printf("Sono in manage connection 5\n");
-
-            lock(state_syn -> mtx); {
-                state_syn -> conn_num++;
-            } unlock(state_syn -> mtx);
-
-            printf("Sono in manage connection 6\n");
-
             accept_conn_syn -> conn_sd = -1;
-
-            printf("my index: %d\n", *my_index);
-
             signal_cond(accept_conn_syn -> cond + *my_index);
-
-            printf("Sono in manage connection 7\n");
 
         } unlock(accept_conn_syn -> mtx);
 
+        lock(state_syn -> mtx); {
+            state_syn -> conn_num++;
+        } unlock(state_syn -> mtx);
+
         th_scaling_up();
+
+        printf("Finito scaling up\n");
 
         analyze_http_request(conn_sd, cl_addr);
 
