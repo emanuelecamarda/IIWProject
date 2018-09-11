@@ -180,14 +180,9 @@ void manage_option(int argc, char **argv) {
 }
 
 void struct_init(void) {
-    pthread_mutex_t *cache_syn_mtx, *state_syn_mtx, *th_syn_mtx, *accept_conn_syn_mtx;
-    pthread_cond_t *cache_syn_cond, *state_syn_cond, *th_syn_cond;
+    pthread_mutex_t *cache_syn_mtx, *state_syn_mtx, *th_syn_mtx;
+    pthread_cond_t *cache_syn_cond, *state_syn_cond;
     int i;
-
-    accept_conn_syn = malloc(sizeof(struct accept_conn_syn_t));
-    if (!accept_conn_syn) {
-        error_found("Error in malloc!\n");
-    }
 
     cache_syn_mtx = malloc(sizeof(pthread_mutex_t));
     if (!cache_syn_mtx) {
@@ -211,20 +206,6 @@ void struct_init(void) {
     if (!th_syn_mtx) {
         error_found("Error in malloc!\n");
     }
-    th_syn_cond = malloc(sizeof(pthread_cond_t));
-    if (!th_syn_cond) {
-        error_found("Error in malloc!\n");
-    }
-
-    accept_conn_syn_mtx = malloc(sizeof(pthread_mutex_t));
-    if (!accept_conn_syn_mtx) {
-        error_found("Error in malloc!\n");
-    }
-
-    accept_conn_syn -> cond = malloc(sizeof(pthread_cond_t) * MAX_CONN_NUM);
-    if (!accept_conn_syn -> cond) {
-        error_found("Error in malloc!\n");
-    }
 
     cache_syn = malloc(sizeof(struct cache_syn_t));
     if (!cache_syn) {
@@ -239,17 +220,20 @@ void struct_init(void) {
         error_found("Error in malloc!\n");
     }
 
+    th_syn -> cond = malloc(sizeof(pthread_cond_t) * MAX_CONN_NUM);
+    if (!th_syn -> cond) {
+        error_found("Error in malloc!\n");
+    }
+
 
     if (pthread_mutex_init(cache_syn_mtx, NULL) != 0 ||
         pthread_mutex_init(state_syn_mtx, NULL) != 0 ||
         pthread_mutex_init(th_syn_mtx, NULL) != 0 ||
-        pthread_mutex_init(accept_conn_syn_mtx, NULL) ||
         pthread_cond_init(cache_syn_cond, NULL) != 0 ||
-        pthread_cond_init(state_syn_cond, NULL) != 0 ||
-        pthread_cond_init(th_syn_cond, NULL) != 0)
+        pthread_cond_init(state_syn_cond, NULL) != 0)
         error_found("Error in pthread_mutex_init or pthread_cond_init!\n");
 
-    memset(accept_conn_syn -> cond, (int) '\0', sizeof(pthread_cond_t) * MAX_CONN_NUM);
+    memset(th_syn -> cond, (int) '\0', sizeof(pthread_cond_t) * MAX_CONN_NUM);
 
     cache_syn -> mtx = cache_syn_mtx;
     cache_syn -> cond = cache_syn_cond;
@@ -257,14 +241,11 @@ void struct_init(void) {
     state_syn -> mtx = state_syn_mtx;
     state_syn -> cond = state_syn_cond;
     th_syn -> mtx = th_syn_mtx;
-    th_syn -> cond = th_syn_cond;
-    accept_conn_syn -> mtx = accept_conn_syn_mtx;
-    accept_conn_syn -> conn_sd = -1;
-    state_syn -> conn_num = state_syn -> init_th_num = 0;
+    state_syn -> conn_num = state_syn -> init_th_num = th_syn -> accept = 0;
     IMAGES = NULL;
 
-    accept_conn_syn -> cl_addr = malloc(sizeof(struct sockaddr_in));
-    if (!accept_conn_syn -> cl_addr){
+    th_syn -> cl_addr = malloc(sizeof(struct sockaddr_in));
+    if (!th_syn -> cl_addr){
         fprintf(stderr, "Error in malloc()!");
     }
 
@@ -281,7 +262,7 @@ void struct_init(void) {
         pthread_cond_t cond;
         if (pthread_cond_init(&cond, NULL) != 0)
             error_found("Error in pthread_cond_init!\n");
-        accept_conn_syn -> cond[i] = cond;
+        th_syn -> cond[i] = cond;
     }
 }
 
@@ -432,7 +413,7 @@ void html_create(void) {
         error_found("Error in malloc!\n");
     memset(html, 0, (size_t) size * STR_DIM * sizeof(char));
 
-    sprintf(html, head, "WebServerProject", "Welcome", "Select an image below");
+    sprintf(html, head, "IIWProject", "IIWProject", "Select an image below");
     size_t len_h = strlen(html), new_len_h;
 
     while (1) {
@@ -509,20 +490,32 @@ void server_work(void) {
     // Accept connections
     while (1) {
         // check MAX_CONN_NUM
-        lock(state_syn -> mtx); {
+        lock(state_syn -> mtx);
+        if (PRINT_DUMP)
+            printf("Main thread lock state_syn\n");
+        {
             while (state_syn -> conn_num >= MAX_CONN_NUM) {
+                if (PRINT_DUMP)
+                    printf("Main thread wait on state_syn cond\n");
                 wait_cond(state_syn -> cond, state_syn -> mtx);
             }
         } unlock(state_syn -> mtx);
+        if (PRINT_DUMP)
+            printf("Main thread unlock state_syn\n");
         memset(&cl_addr, (int) '\0', addr_size);
         errno = 0;
         conn_sd = accept(LISTEN_SD, (struct sockaddr *) &cl_addr, &addr_size);
-        lock(th_syn -> mtx); {
+        lock(th_syn -> mtx);
+        if (PRINT_DUMP)
+            printf("Main thread lock th_syn\n");
+        {
             if (conn_sd == -1) {
                 switch (errno) {
                     case ECONNABORTED:
                         fprintf(stderr, "Error in accept(): connection has been aborted!\n");
                         unlock(th_syn->mtx);
+                        if (PRINT_DUMP)
+                            printf("Main thread unlock th_syn\n");
                         continue;
 
                     case ENOBUFS:
@@ -536,33 +529,49 @@ void server_work(void) {
                     case EMFILE:
                         fprintf(stderr, "Error in accept(): too many open files!\n");
                         lock(state_syn->mtx);
+                        if (PRINT_DUMP)
+                            printf("Main thread lock state_syn\n");
                         {
                             int old_conn_num = state_syn->conn_num;
                             while (old_conn_num >= state_syn->conn_num) {
+                                if (PRINT_DUMP)
+                                    printf("Main thhread wait on state_syn cond\n");
                                 wait_cond(state_syn->cond, state_syn->mtx);
                             }
                         } unlock(state_syn->mtx);
+                        if (PRINT_DUMP)
+                            printf("Main thread unlock state_syn\n");
                         unlock(th_syn->mtx);
+                        if (PRINT_DUMP)
+                            printf("Main thread unlock th_syn\n");
                         continue;
 
                     case EPROTO:
                         fprintf(stderr, "Error in accept(): protocol error!\n");
                         unlock(th_syn->mtx);
+                        if (PRINT_DUMP)
+                            printf("Main thread unlock th_syn\n");
                         continue;
 
                     case EPERM:
                         fprintf(stderr, "Error in accept(): firewall rules forbid connection!\n");
                         unlock(th_syn->mtx);
+                        if (PRINT_DUMP)
+                            printf("Main thread unlock th_syn\n");
                         continue;
 
                     case ETIMEDOUT:
                         fprintf(stderr, "Error in accept(): timeout occure!\n");
                         unlock(th_syn->mtx);
+                        if (PRINT_DUMP)
+                            printf("Main thread unlock th_syn\n");
                         continue;
 
                     case EBADF:
                         fprintf(stderr, "Error in accept(): bad file number!\n");
                         unlock(th_syn->mtx);
+                        if (PRINT_DUMP)
+                            printf("Main thread unlock th_syn\n");
                         continue;
 
                     default:
@@ -585,24 +594,26 @@ void server_work(void) {
             // MAX_CONN_NUM
             if (j == -1) {
                 unlock(th_syn -> mtx);
+                if (PRINT_DUMP)
+                    printf("Main thread unlock th_syn\n");
                 continue;
             }
 
             th_syn -> clients[i] = conn_sd;
-            lock(accept_conn_syn -> mtx); {
-                while (accept_conn_syn -> conn_sd != -1) {
-                    wait_cond(&accept_conn_syn->cond[i], accept_conn_syn->mtx);
-                }
-
-                memset(accept_conn_syn -> cl_addr, (int) '\0', addr_size);
-                memcpy(accept_conn_syn -> cl_addr, &cl_addr, addr_size);
-                accept_conn_syn -> conn_sd = conn_sd;
-                signal_cond(accept_conn_syn -> cond + i);
-                while (accept_conn_syn -> conn_sd != -1) {
-                    wait_cond(&accept_conn_syn->cond[i], accept_conn_syn -> mtx);
-                }
-            } unlock(accept_conn_syn -> mtx);
+            th_syn -> accept = 0;
+            memset(th_syn -> cl_addr, (int) '\0', addr_size);
+            memcpy(th_syn -> cl_addr, &cl_addr, addr_size);
+            if (PRINT_DUMP)
+                printf("Main thread signal th_syn cond[%d]\n", i);
+            signal_cond(th_syn -> cond + i);
+            while (!th_syn -> accept) {
+                if (PRINT_DUMP)
+                    printf("Main thread wait on th_syn cond[%d]\n", i);
+                wait_cond(&th_syn->cond[i], th_syn -> mtx);
+            }
             i = (i + 1) % MAX_CONN_NUM;
         } unlock(th_syn -> mtx);
+        if (PRINT_DUMP)
+            printf("Main thread unlock th_syn\n");
     }
 }

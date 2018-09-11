@@ -159,6 +159,7 @@ int http_response(int conn_sd, char **line_req) {
         return 0;
     }
 
+    // main page
     if (strncmp(line_req[1], "/", strlen(line_req[1])) == 0) {
         sprintf(http_resp, header, 200, "OK", t, server, "text/html", strlen(HTML[0]), "keep-alive");
         if (strncmp(line_req[0], "HEAD", 4)) {
@@ -204,10 +205,12 @@ int http_response(int conn_sd, char **line_req) {
                     struct cache_t *c;
                     int accept = q_factor(line_req[5]);
                     if (accept == -1)
-                        fprintf(stderr, "Eerror in strtod!\n");
+                        fprintf(stderr, "Error in strtod!\n");
                     int q = accept < 0 ? Q_FACTOR : accept;
 
                     lock(cache_syn -> mtx);
+                    if (PRINT_DUMP)
+                        printf("Lock cache_syn\n");
                     {
                         c = i -> img_c;
                         while (c) {
@@ -259,6 +262,8 @@ int http_response(int conn_sd, char **line_req) {
                                     fprintf(stderr, "Error in system(): cannot refactoring image %s\n", p_name);
                                     free_http_mem(t, http_resp);
                                     unlock(cache_syn -> mtx);
+                                    if (PRINT_DUMP)
+                                        printf("Unlock cache_syn\n");
                                     return -1;
                                 }
 
@@ -270,16 +275,22 @@ int http_response(int conn_sd, char **line_req) {
                                         fprintf(stderr, "Error in stat(): path too long!\n");
                                         free_http_mem(t, http_resp);
                                         unlock(cache_syn -> mtx);
+                                        if (PRINT_DUMP)
+                                            printf("Unlock cache_syn\n");
                                         return -1;
                                     }
                                     fprintf(stderr, "Error in http_response: Invalid path!\n");
                                     free_http_mem(t, http_resp);
                                     unlock(cache_syn -> mtx);
+                                    if (PRINT_DUMP)
+                                        printf("Unlock cache_syn\n");
                                     return -1;
                                 } else if (!S_ISREG(buf.st_mode)) {
                                     fprintf(stderr, "Error in http_response: Non-regular files can not be analysed!\n");
                                     free_http_mem(t, http_resp);
                                     unlock(cache_syn -> mtx);
+                                    if (PRINT_DUMP)
+                                        printf("Unlock cache_syn\n");
                                     return -1;
                                 }
 
@@ -289,6 +300,8 @@ int http_response(int conn_sd, char **line_req) {
                                     fprintf(stderr, "Error in malloc!\n");
                                     free_http_mem(t, http_resp);
                                     unlock(cache_syn -> mtx);
+                                    if (PRINT_DUMP)
+                                        printf("Unlock cache_syn\n");
                                     return -1;
                                 }
                                 memset(new_entry, (int) '\0', sizeof(struct cache_t));
@@ -328,11 +341,15 @@ int http_response(int conn_sd, char **line_req) {
                                         fprintf(stderr, "Error in opendir: Permission denied!\n");
                                         free_http_mem(t, http_resp);
                                         unlock(cache_syn -> mtx);
+                                        if (PRINT_DUMP)
+                                            printf("Unlock cache_syn\n");
                                         return -1;
                                     }
                                     fprintf(stderr, "Error in opendir!\n");
                                     free_http_mem(t, http_resp);
                                     unlock(cache_syn -> mtx);
+                                    if (PRINT_DUMP)
+                                        printf("Unlock cache_syn\n");
                                     return -1;
                                 }
                                 while ((ent = readdir(dir)) != NULL) {
@@ -352,6 +369,8 @@ int http_response(int conn_sd, char **line_req) {
                                     free(img_to_send);
                                     free_http_mem(t, http_resp);
                                     unlock(cache_syn -> mtx);
+                                    if (PRINT_DUMP)
+                                        printf("Unlock cache_syn\n");
                                     return -1;
                                 }
 
@@ -365,6 +384,8 @@ int http_response(int conn_sd, char **line_req) {
                                     fprintf(stderr, "Error in http_response: cannot resizing image!\n");
                                     free_http_mem(t, http_resp);
                                     unlock(cache_syn -> mtx);
+                                    if (PRINT_DUMP)
+                                        printf("Unlock cache_syn\n");
                                     return -1;
                                 }
                                 struct stat buf;
@@ -375,16 +396,22 @@ int http_response(int conn_sd, char **line_req) {
                                         fprintf(stderr, "Error in stat(): path too long!\n");
                                         free_http_mem(t, http_resp);
                                         unlock(cache_syn -> mtx);
+                                        if (PRINT_DUMP)
+                                            printf("Unlock cache_syn\n");
                                         return -1;
                                     }
                                     fprintf(stderr, "Error in http_response: Invalid path!\n");
                                     free_http_mem(t, http_resp);
                                     unlock(cache_syn -> mtx);
+                                    if (PRINT_DUMP)
+                                        printf("Unlock cache_syn\n");
                                     return -1;
                                 } else if (!S_ISREG(buf.st_mode)) {
                                     fprintf(stderr, "Error in http_response: non-regular files can not be analysed!\n");
                                     free_http_mem(t, http_resp);
                                     unlock(cache_syn -> mtx);
+                                    if (PRINT_DUMP)
+                                        printf("Unlock cache_syn\n");
                                     return -1;
                                 }
                                 // insert new image in cache
@@ -393,6 +420,8 @@ int http_response(int conn_sd, char **line_req) {
                                     fprintf(stderr, "Error in malloc!\n");
                                     free_http_mem(t, http_resp);
                                     unlock(cache_syn -> mtx);
+                                    if (PRINT_DUMP)
+                                        printf("Unlock cache_syn\n");
                                     return -1;
                                 }
                                 memset(new_entry, (int) '\0', sizeof(struct cache_t));
@@ -435,6 +464,8 @@ int http_response(int conn_sd, char **line_req) {
                                             free_http_mem(t, http_resp);
                                             cache_space = -1;
                                             unlock(cache_syn -> mtx);
+                                            if (PRINT_DUMP)
+                                                printf("Unlock cache_syn\n");
                                             return -1;
                                         }
                                         break;
@@ -448,6 +479,8 @@ int http_response(int conn_sd, char **line_req) {
                                             "Cache size automatically set to Unlimited\n\t\tfinding: %s\n", name_remove);
                                     free_http_mem(t, http_resp);
                                     unlock(cache_syn -> mtx);
+                                    if (PRINT_DUMP)
+                                        printf("Unlock cache_syn\n");
                                     return -1;
                                 }
                                 struct cache_hit *new_hit = malloc(sizeof(struct cache_hit));
@@ -456,6 +489,8 @@ int http_response(int conn_sd, char **line_req) {
                                     fprintf(stderr, "Error in malloc!\n");
                                     free_http_mem(t, http_resp);
                                     unlock(cache_syn -> mtx);
+                                    if (PRINT_DUMP)
+                                        printf("Unlock cache_syn\n");
                                     return -1;
                                 }
 
@@ -477,6 +512,8 @@ int http_response(int conn_sd, char **line_req) {
                                     fprintf(stderr, "Error in http_response: cannot resizing image!\n");
                                     free_http_mem(t, http_resp);
                                     unlock(cache_syn -> mtx);
+                                    if (PRINT_DUMP)
+                                        printf("Unlock cache_syn\n");
                                     return -1;
                                 }
 
@@ -488,16 +525,22 @@ int http_response(int conn_sd, char **line_req) {
                                         fprintf(stderr, "Error in stat(): path too long!\n");
                                         free_http_mem(t, http_resp);
                                         unlock(cache_syn -> mtx);
+                                        if (PRINT_DUMP)
+                                            printf("Unlock cache_syn\n");
                                         return -1;
                                     }
                                     fprintf(stderr, "Error in stat(): invalid path!\n");
                                     free_http_mem(t, http_resp);
                                     unlock(cache_syn -> mtx);
+                                    if (PRINT_DUMP)
+                                        printf("Unlock cache_syn\n");
                                     return -1;
                                 } else if (!S_ISREG(buf.st_mode)) {
                                     fprintf(stderr, "Error in http_response: non-regular files can not be analysed!\n");
                                     free_http_mem(t, http_resp);
                                     unlock(cache_syn -> mtx);
+                                    if (PRINT_DUMP)
+                                        printf("Unlock cache_syn\n");
                                     return -1;
                                 }
 
@@ -518,6 +561,8 @@ int http_response(int conn_sd, char **line_req) {
                             }
                         }
                     } unlock(cache_syn -> mtx);
+                    if (PRINT_DUMP)
+                        printf("Unlock cache_syn\n");
 
                     if (strncmp(line_req[0], "HEAD", 4)) {
                         DIR *dir;

@@ -51,7 +51,6 @@ struct cache_t *cache;
 struct cache_syn_t *cache_syn;
 struct state_syn_t *state_syn;
 struct th_syn_t *th_syn;
-struct accept_conn_syn_t *accept_conn_syn;
 
 // write on stderr and on log file the error that occurs and exit with failure
 void error_found(char *msg) {
@@ -86,13 +85,11 @@ void free_mem() {
     free(th_syn -> clients);
     free(th_syn -> mtx);
     free(th_syn -> cond);
+    free(th_syn -> cl_addr);
     free(state_syn -> mtx);
     free(state_syn -> cond);
     free(cache_syn -> mtx);
     free(cache_syn -> cond);
-    free(accept_conn_syn -> mtx);
-    free(accept_conn_syn -> cond);
-    free(accept_conn_syn -> cl_addr);
     if (cache_space >= 0 && cache_syn -> cache_hit_head && cache_syn -> cache_hit_tail) {
         struct cache_hit *to_be_removed;
         while (cache_syn -> cache_hit_tail) {
@@ -104,7 +101,6 @@ void free_mem() {
     free(th_syn);
     free(state_syn);
     free(cache_syn);
-    free(accept_conn_syn);
     rm_dir(TMP_RESIZED_PATH);
     rm_dir(TMP_CACHE_PATH);
 }

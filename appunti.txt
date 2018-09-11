@@ -3,3 +3,5 @@ prima la ricerco tra le immagini resized, poi la cerco in cache:
 - se la trovo la sposto in cima alla struct
 - se non la trovo, faccio il resizing, se c'è spazio la inserisco in cache, altrimenti elimino l'immagina meno richiesta
     in cache (quella in coda) e la aggiungo.
+
+th_syn gestisce la comunicazione tra il thread master e i worker tramite un vettore di cariabili di condizione.

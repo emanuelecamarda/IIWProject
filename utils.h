@@ -12,7 +12,7 @@
 #include <arpa/inet.h>
 
 #define STR_DIM 1024
-#define PRINT_DUMP 0
+#define PRINT_DUMP 1
 #define Q_FACTOR 70
 
 struct image_t {
@@ -60,14 +60,7 @@ struct th_syn_t {
     pthread_cond_t *cond;
     struct sockaddr_in *cl_addr;
     int *clients;
-};
-
-struct accept_conn_syn_t {
-    pthread_mutex_t *mtx;
-    // array of cond with size MAX_CONN_NUM
-    pthread_cond_t *cond;
-    struct sockaddr_in *cl_addr;
-    volatile int conn_sd;
+    int accept;
 };
 
 extern int PORT;
@@ -92,7 +85,6 @@ extern struct cache_t *cache;
 extern struct cache_syn_t *cache_syn;
 extern struct state_syn_t *state_syn;
 extern struct th_syn_t *th_syn;
-extern struct accept_conn_syn_t *accept_conn_syn;
 
 void error_found(char *msg);
 void writef(char *s, FILE *file);

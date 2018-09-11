@@ -31,16 +31,22 @@ void th_init(void *arg) {
     int i, *n = (int *) arg;
 
     lock(th_syn -> mtx);
+    if (PRINT_DUMP)
+        printf("Lock th_syn in th_init\n");
     {
         for (i = 0; i < *n; i++) {
             if (th_syn->clients[i] == -2) {
                 create_th(manage_connection, &i);
                 while (th_syn->clients[i] != -1) {
-                    wait_cond(th_syn->cond, th_syn->mtx);
+                    if (PRINT_DUMP)
+                        printf("Wait on th_syn cond[%d] in th_init\n", i);
+                    wait_cond(th_syn->cond + i, th_syn->mtx);
                 }
             }
         }
     } unlock(th_syn->mtx);
+    if (PRINT_DUMP)
+        printf("Unlock th_syn in th_init\n");
 }
 
 // kill arg threads
@@ -48,22 +54,26 @@ void th_kill(void *arg) {
     int i, j, *n = (int *) arg;
 
     lock(th_syn -> mtx);
+    if (PRINT_DUMP)
+        printf("Lock th_syn in th_kill\n");
     {
         for (i = 0, j = 0; j < *n && i < MAX_CONN_NUM; i++) {
             if (th_syn->clients[i] == -1) {
                 th_syn -> clients[i] = -2;
-                lock(accept_conn_syn -> mtx); {
-                    while (accept_conn_syn -> conn_sd != -1)
-                        wait_cond(accept_conn_syn -> cond, accept_conn_syn -> mtx);
-                    accept_conn_syn -> conn_sd = -2;
-                    signal_cond(accept_conn_syn -> cond + i);
-                    while (accept_conn_syn -> conn_sd != -1)
-                        wait_cond(accept_conn_syn -> cond, accept_conn_syn -> mtx);
-                } unlock(accept_conn_syn -> mtx);
+                if (PRINT_DUMP)
+                    printf("signal th_syn cond[%d] in th_kill\n", i);
+                signal_cond(th_syn -> cond + i);
+                while (th_syn -> clients[i] != -1) {
+                    if (PRINT_DUMP)
+                        printf("Wait on th_syn cond[%d] in th_kill\n", i);
+                    wait_cond(th_syn->cond + i, th_syn->mtx);
+                }
                 j++;
             }
         }
     } unlock(th_syn->mtx);
+    if (PRINT_DUMP)
+        printf("Unlock th_syn in th_kill\n");
 }
 
 //  Use by a thread to lock a mutex
@@ -93,9 +103,11 @@ void signal_cond(pthread_cond_t *cond) {
 // use to create new thread if necessary
 void th_scaling_up(void) {
     lock(state_syn -> mtx);
-    if (state_syn -> conn_num / state_syn -> init_th_num * 100 >  TH_SCALING_UP) {
+    if (PRINT_DUMP)
+        printf("Lock state_syn in scaling up\n");
+    if ((state_syn -> conn_num / state_syn -> init_th_num) * 100 > TH_SCALING_UP) {
         int n, i;
-        if (state_syn -> init_th_num + MIN_TH_NUM <= MAX_CONN_NUM) {
+        if ((state_syn -> init_th_num) + MIN_TH_NUM <= MAX_CONN_NUM) {
             n = MIN_TH_NUM;
         } else {
             n = MAX_CONN_NUM - state_syn -> init_th_num;
@@ -103,13 +115,17 @@ void th_scaling_up(void) {
         if (n) {
             state_syn -> init_th_num += n;
             unlock(state_syn -> mtx);
+            if (PRINT_DUMP)
+                printf("Unlock state_syn in scaling up\n");
             for (i = 0; i < n; i++) {
                 th_init(&n);
             }
-        } else {
-            unlock(state_syn->mtx);
+            return;
         }
     }
+    unlock(state_syn->mtx);
+    if (PRINT_DUMP)
+        printf("Unlock state_syn in scaling up\n");
 }
 
 // Used to kill threads if necessary
@@ -117,6 +133,8 @@ void th_scaling_down(void) {
     int n = 0, i;
 
     lock(state_syn->mtx);
+    if (PRINT_DUMP)
+        printf("Lock state_syn in scaling down\n");
     {
         if (state_syn->conn_num / state_syn->init_th_num * 100 < TH_SCALING_DOWN) {
             if (state_syn->init_th_num - MIN_TH_NUM >= MIN_TH_NUM) {
@@ -126,6 +144,8 @@ void th_scaling_down(void) {
             }
         }
     } unlock(state_syn->mtx);
+    if (PRINT_DUMP)
+        printf("Unlock state_syn in scaling down\n");
     if (n) {
         for (i = 0; i < n; i++) {
             th_kill(&n);
@@ -150,10 +170,15 @@ void *manage_input(void *arg) {
             printf("Input not valid!\n%s\n", USER_OPT);
         } else {
             if (cmd[0] == 's' || cmd[0] == 'S') {
-                lock(state_syn -> mtx); {
+                lock(state_syn -> mtx);
+                if (PRINT_DUMP)
+                    printf("Input thread lock state_syn\n");
+                {
                     conn = state_syn -> conn_num;
                     num_th = state_syn -> init_th_num;
                 } unlock(state_syn -> mtx);
+                if (PRINT_DUMP)
+                    printf("Input thread unlock state_syn\n");
                 fprintf(stdout, "\nConnections' number: %d\n"
                                 "Threads running: %d\n\n", conn, num_th);
                 continue;
@@ -167,6 +192,8 @@ void *manage_input(void *arg) {
                 }
                 for (i = 0; i < MAX_CONN_NUM; i++) {
                     lock(th_syn -> mtx);
+                    if (PRINT_DUMP)
+                        printf("Input thread lock th_syn\n");
                     {
                         if (th_syn -> clients[i] >= 0) {
                             if (close(th_syn -> clients[i]) != 0) {
@@ -188,6 +215,8 @@ void *manage_input(void *arg) {
                             }
                         }
                     } unlock(th_syn -> mtx);
+                    if (PRINT_DUMP)
+                        printf("Input thread unlock th_syn\n");
                 }
                 write_log("\t\tServer closed.\n\n\n");
 
@@ -218,41 +247,62 @@ void *manage_connection(void *arg) {
     if (pthread_detach(pthread_self()) != 0)
         error_found("Error in pthread_detach!\n");
 
+    lock(state_syn -> mtx);
+    if (PRINT_DUMP)
+        printf("Thread %d lock state_syn\n", *my_index);
+    {
+        state_syn -> init_th_num++;
+    } unlock(state_syn -> mtx);
+    if (PRINT_DUMP)
+        printf("Thread %d unlock state_syn\n", *my_index);
+
     lock(th_syn -> mtx);
+    if (PRINT_DUMP)
+        printf("Thread %d lock th_syn\n", *my_index);
     {
         // Thread ready for incoming connections
         th_syn -> clients[*my_index] = -1;
-        lock(state_syn -> mtx);
-        {
-            state_syn -> init_th_num++;
-        } unlock(state_syn -> mtx);
-        signal_cond(th_syn -> cond);
-    } unlock(th_syn -> mtx);
+        if (PRINT_DUMP)
+            printf("Thread %d signal th_syn cond[%d]\n", *my_index, *my_index);
+        signal_cond(th_syn -> cond + *my_index);
+    }
 
     // Deal connections
     while (1) {
         memset(&cl_addr, (int) '\0', sizeof(struct sockaddr_in));
-        lock(accept_conn_syn -> mtx); {
-            wait_cond(accept_conn_syn -> cond + *my_index, accept_conn_syn -> mtx);
-            conn_sd = accept_conn_syn -> conn_sd;
-            if (conn_sd == -2) {
-                accept_conn_syn -> conn_sd = -1;
-                unlock(accept_conn_syn -> mtx);
-                break;
-            }
-            memcpy(&cl_addr, &accept_conn_syn -> cl_addr, sizeof(struct sockaddr_in));
-            accept_conn_syn -> conn_sd = -1;
-            signal_cond(accept_conn_syn -> cond + *my_index);
+        if (PRINT_DUMP)
+            printf("Thread %d wait on th_syn cond[%d]\n", *my_index, *my_index);
+        wait_cond(th_syn -> cond + *my_index, th_syn -> mtx);
+        conn_sd = th_syn -> clients[*my_index];
+        if (conn_sd == -1) {
+            error_found("Unknown error in manage threads!");
+        }
+        if (conn_sd == -2) {
+            th_syn -> clients[*my_index] = -1;
+            unlock(th_syn -> mtx);
+            if (PRINT_DUMP)
+                printf("Thread %d unlock th_syn\n", *my_index);
+            break;
+        }
+        memcpy(&cl_addr, &th_syn -> cl_addr, sizeof(struct sockaddr_in));
+        th_syn -> accept = 1;
+        if (PRINT_DUMP)
+            printf("Thread %d signal th_syn cond[%d]\n", *my_index, *my_index);
+        signal_cond(th_syn -> cond + *my_index);
+        unlock(th_syn -> mtx);
+        if (PRINT_DUMP)
+            printf("Thread %d unlock th_syn\n", *my_index);
 
-        } unlock(accept_conn_syn -> mtx);
-
-        lock(state_syn -> mtx); {
+        lock(state_syn -> mtx);
+        if (PRINT_DUMP)
+            printf("Thread %d lock state_syn\n", *my_index);
+        {
             state_syn -> conn_num++;
         } unlock(state_syn -> mtx);
+        if (PRINT_DUMP)
+            printf("Thread %d unlock state_syn\n", *my_index);
 
-        th_scaling_up();
-
-        printf("Finito scaling up\n");
+        // th_scaling_up();
 
         analyze_http_request(conn_sd, cl_addr);
 
@@ -274,14 +324,26 @@ void *manage_connection(void *arg) {
             }
         }
 
-        lock(state_syn -> mtx); {
+        lock(state_syn -> mtx);
+        if (PRINT_DUMP)
+            printf("Thread %d lock state_syn\n", *my_index);
+        {
             state_syn -> conn_num--;
+            if (PRINT_DUMP)
+                printf("Thread %d signal state_syn\n", *my_index);
             signal_cond(state_syn -> cond);
         } unlock(state_syn -> mtx);
+        if (PRINT_DUMP)
+            printf("Thread %d unlock state_syn\n", *my_index);
 
-        lock(th_syn -> mtx); {
+        lock(th_syn -> mtx);
+        if (PRINT_DUMP)
+            printf("Thread %d lock th_syn\n", *my_index);
+        {
             th_syn -> clients[*my_index] = -1;
         } unlock(th_syn -> mtx);
+        if (PRINT_DUMP)
+            printf("Thread %d unlock th_syn\n", *my_index);
 
         th_scaling_down();
     }
