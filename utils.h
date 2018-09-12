@@ -12,8 +12,8 @@
 #include <arpa/inet.h>
 
 #define STR_DIM 1024
-#define PRINT_DUMP 1
-#define Q_FACTOR 70
+#define PRINT_DUMP 0
+#define Q_FACTOR 100
 
 struct image_t {
     // Name of current image

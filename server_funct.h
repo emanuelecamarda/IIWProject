@@ -15,6 +15,6 @@ void struct_init(void);
 void server_start(void);
 void image_resize(void);
 void html_create(void);
-void server_work(void);
+void main_th_work(void);
 
 #endif //PROGETTO_SERVER_FUNCT_H

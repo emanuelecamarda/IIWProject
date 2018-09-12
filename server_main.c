@@ -13,7 +13,7 @@ int main(int argc, char **argv) {
 
     init(argc, argv);
 
-    server_work();
+    main_th_work();
 
     exit(EXIT_SUCCESS);
 }
@@ -54,13 +54,18 @@ void init(int argc, char **argv) {
     create_th(manage_input, NULL);
     if (PRINT_DUMP)
         printf("Finish create_th(manage_input, NULL)\n");
-    // create starting threads
+    lock(th_syn -> mtx);
+    if (PRINT_DUMP)
+        printf("Main thread lock th_syn\n");
+    // create starting threads. Needs th_syn locked
     th_init(&MIN_TH_NUM);
+    unlock(th_syn->mtx);
+    if (PRINT_DUMP)
+        printf("Main thread unlock th_syn\n");
     if (PRINT_DUMP)
         printf("Finish th_init(MIN_TH_NUM)\n");
-    if (PRINT_DUMP)
-        printf("\nPort number: %d\nImages' path: %s\nLog file's path: %s\nMinimum threads' number: %d\n"
-               "Maximum connection's number: %d\nResize images' percentage: %d\nCache size: %d\nScaling up: %d\n"
-               "Scaling down: %d\n", PORT, IMG_PATH, LOG_PATH, MIN_TH_NUM, MAX_CONN_NUM, RESIZE_PERC, cache_space,
-               TH_SCALING_UP, TH_SCALING_DOWN);
+    printf("\nPort number: %d\nImages' path: %s\nLog file's path: %s\nMinimum threads' number: %d\n"
+           "Maximum connection's number: %d\nResize images' percentage: %d\nCache size: %d\nScaling up: %d\n"
+           "Scaling down: %d\n", PORT, IMG_PATH, LOG_PATH, MIN_TH_NUM, MAX_CONN_NUM, RESIZE_PERC, cache_space,
+           TH_SCALING_UP, TH_SCALING_DOWN);
 }

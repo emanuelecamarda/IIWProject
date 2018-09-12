@@ -112,6 +112,7 @@ void manage_option(int argc, char **argv) {
 
             case 'r':
                 errno = 0;
+                printf("optarg di 'r' = %s\n", optarg);
                 int resize_perc = (int) strtol(optarg, &e, 10);
                 if (errno != 0 || *e != '\0')
                     error_found("Error in strtol: Invalid number for resizing percentage!\n");
@@ -379,8 +380,7 @@ void image_resize(void) {
         sprintf(output, "%s/%s", TMP_RESIZED_PATH, ent -> d_name);
         sprintf(command, convert, input, RESIZE_PERC, output);
 
-        if (PRINT_DUMP)
-            printf("Try to resize image %s\n", ent -> d_name);
+        printf("Try to resize image %s\n", ent -> d_name);
 
         if (system(command))
             error_found("Error in resizing images!\n");
@@ -480,13 +480,13 @@ void html_create(void) {
     sprintf(HTML[2], description2, strlen(description2));
 }
 
-// Do Server work
-void server_work(void) {
+// Main thread work
+void main_th_work(void) {
     int conn_sd, i = 0, j = 1;
     struct sockaddr_in cl_addr;
     socklen_t addr_size = sizeof(struct sockaddr_in);
 
-    fprintf(stdout, "\nWaiting for incoming connection...\n");
+    fprintf(stdout, "\n\nWaiting for incoming connection...\n");
     // Accept connections
     while (1) {
         // check MAX_CONN_NUM

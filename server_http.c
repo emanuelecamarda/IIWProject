@@ -208,6 +208,8 @@ int http_response(int conn_sd, char **line_req) {
                         fprintf(stderr, "Error in strtod!\n");
                     int q = accept < 0 ? Q_FACTOR : accept;
 
+                    printf("q = %d, accept = %d, Accept header = %s\n", q, accept, line_req[5]);
+
                     lock(cache_syn -> mtx);
                     if (PRINT_DUMP)
                         printf("Lock cache_syn\n");
