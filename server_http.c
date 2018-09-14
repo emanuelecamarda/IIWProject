@@ -1,6 +1,7 @@
 //
 // Created by Emanuele on 08/09/2018.
 //
+
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <string.h>
@@ -13,9 +14,10 @@
 #include "server_http.h"
 #include "threads_work.h"
 
+// analyze and serve http request
 void analyze_http_request(int conn_sd, struct sockaddr_in cl_addr) {
     char http_req[STR_DIM * STR_DIM];
-    char *line_req[7];
+    char *line_req[6];
     ssize_t tmp;
     int i;
     struct timeval tv;
@@ -27,7 +29,7 @@ void analyze_http_request(int conn_sd, struct sockaddr_in cl_addr) {
 
     do {
         memset(http_req, (int) '\0', 5 * STR_DIM);
-        for (i = 0; i < 7; ++i)
+        for (i = 0; i < 6; ++i)
             line_req[i] = NULL;
 
         errno = 0;
@@ -83,13 +85,13 @@ void analyze_http_request(int conn_sd, struct sockaddr_in cl_addr) {
     } while (line_req[3] && !strncmp(line_req[3], "keep-alive", 10));
 }
 
-// Used to split HTTP message
+// Used to split HTTP message. buf[0] = message type, buf[1] = request object, buf[2] = http version,
+// buf[3] = connection header, buf[4] = user agent header, buf[5] = accept header
 void split_http_request(char *s, char **buf) {
-    char *req_header[4], *k;
+    char *req_header[3], *k;
     req_header[0] = "Connection: ";
     req_header[1] = "User-Agent: ";
     req_header[2] = "Accept: ";
-    req_header[3] = "Cache-Control: ";
     // HTTP message type
     buf[0] = strtok(s, " ");
     // Requested object
@@ -120,16 +122,10 @@ void split_http_request(char *s, char **buf) {
             if (buf[5][strlen(buf[5]) - 1] == '\r')
                 buf[5][strlen(buf[5]) - 1] = '\0';
         }
-        // Cache-Control header
-        else if (!strncmp(k, req_header[3], strlen(req_header[3]))) {
-            buf[6] = k + strlen(req_header[3]);
-            if (buf[6][strlen(buf[6]) - 1] == '\r')
-                buf[6][strlen(buf[6]) - 1] = '\0';
-        }
     }
 }
 
-// send http response
+// send http response to client
 int http_response(int conn_sd, char **line_req) {
     char *http_resp = malloc(STR_DIM * STR_DIM * 2 * sizeof(char));
     if (!http_resp)
@@ -288,7 +284,8 @@ int http_response(int conn_sd, char **line_req) {
                                         printf("Unlock cache_syn\n");
                                     return -1;
                                 } else if (!S_ISREG(buf.st_mode)) {
-                                    fprintf(stderr, "Error in http_response: Non-regular files can not be analysed!\n");
+                                    fprintf(stderr, "Error in http_response: Non-regular files can not be "
+                                                    "analysed!\n");
                                     free_http_mem(t, http_resp);
                                     unlock(cache_syn -> mtx);
                                     if (PRINT_DUMP)
@@ -364,7 +361,8 @@ int http_response(int conn_sd, char **line_req) {
                                     }
                                 }
                                 if (!ent) {
-                                    fprintf(stderr, "Error in http_response: file '%s' not removed\n", name_to_remove);
+                                    fprintf(stderr, "Error in http_response: file '%s' not removed\n",
+                                            name_to_remove);
                                 }
                                 if (closedir(dir)) {
                                     fprintf(stderr, "Error in closedir!\n");
@@ -409,7 +407,8 @@ int http_response(int conn_sd, char **line_req) {
                                         printf("Unlock cache_syn\n");
                                     return -1;
                                 } else if (!S_ISREG(buf.st_mode)) {
-                                    fprintf(stderr, "Error in http_response: non-regular files can not be analysed!\n");
+                                    fprintf(stderr, "Error in http_response: non-regular files can not be "
+                                                    "analysed!\n");
                                     free_http_mem(t, http_resp);
                                     unlock(cache_syn -> mtx);
                                     if (PRINT_DUMP)
@@ -461,7 +460,8 @@ int http_response(int conn_sd, char **line_req) {
                                         }
                                         if (!cache_ptr) {
                                             fprintf(stderr, "Error! struct cache_t compromised\n"
-                                                            "Cache size automatically set to Unlimited\n\t\tfinding: %s\n",
+                                                            "Cache size automatically set to Unlimited\n\t\t"
+                                                            "finding: %s\n",
                                                     name_remove);
                                             free_http_mem(t, http_resp);
                                             cache_space = -1;
@@ -538,7 +538,8 @@ int http_response(int conn_sd, char **line_req) {
                                         printf("Unlock cache_syn\n");
                                     return -1;
                                 } else if (!S_ISREG(buf.st_mode)) {
-                                    fprintf(stderr, "Error in http_response: non-regular files can not be analysed!\n");
+                                    fprintf(stderr, "Error in http_response: non-regular files can not be "
+                                                    "analysed!\n");
                                     free_http_mem(t, http_resp);
                                     unlock(cache_syn -> mtx);
                                     if (PRINT_DUMP)

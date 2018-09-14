@@ -15,6 +15,7 @@
 #include "server_http.h"
 #include "threads_work.h"
 
+// create a new thread
 void create_th(void * (*work) (void *), void *k) {
     pthread_t tid;
     errno = 0;
@@ -252,7 +253,7 @@ void *manage_input(void *arg) {
     }
 }
 
-// Threads work to manage connection
+// Threads' work to manage connection
 void *manage_connection(void *arg) {
     struct sockaddr_in cl_addr;
     int *my_index = malloc(sizeof(int)), conn_sd;

@@ -1,6 +1,7 @@
 //
 // Created by emanuele on 31/08/18.
 //
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>
@@ -20,7 +21,7 @@
 void set_default_path(void) {
     char cwd[PATH_MAX];
     if (getcwd(cwd, sizeof(cwd)) == NULL) {
-        error_found("Error in getcwd");
+        error_found("Error in getcwd!");
     }
     memset(LOG_PATH, 0, PATH_MAX);
     memset(IMG_PATH, 0, PATH_MAX);
@@ -28,6 +29,7 @@ void set_default_path(void) {
     strcpy(IMG_PATH, cwd);
 }
 
+// Ignore signal SIGPIPE
 void manage_signal(void) {
     struct sigaction sa;
 
@@ -180,6 +182,7 @@ void manage_option(int argc, char **argv) {
         error_found("Error: scaling up is lower then scaling down!\n");
 }
 
+// Initialize all struct needed to server
 void struct_init(void) {
     pthread_mutex_t *cache_syn_mtx, *state_syn_mtx, *th_syn_mtx;
     pthread_cond_t *cache_syn_cond, *state_syn_cond;
@@ -267,6 +270,7 @@ void struct_init(void) {
     }
 }
 
+// Do the socket(),  bind() and listen() operations for server
 void server_start(void) {
     int flag = 1;
     char s_server_start[STR_DIM], *k = "\t\tServer started at port:";
@@ -305,6 +309,7 @@ void server_start(void) {
     write_log(s_server_start);
 }
 
+// Do the resizing of all images save in the struct IMAGES
 void image_resize(void) {
     DIR *dir;
     struct dirent *ent;
@@ -396,6 +401,7 @@ void image_resize(void) {
     fprintf(stdout, "Images resized in '%s' with percentage: %d%%\n", TMP_RESIZED_PATH, RESIZE_PERC);
 }
 
+// create the html main_page and error response
 void html_create(void) {
     // create main page html
     size_t size = 4;
@@ -480,13 +486,14 @@ void html_create(void) {
     sprintf(HTML[2], description2, strlen(description2));
 }
 
-// Main thread work
+// Main thread work: accept() and pass to a worker a new connection
 void main_th_work(void) {
     int conn_sd, i = 0, j = 1;
     struct sockaddr_in cl_addr;
     socklen_t addr_size = sizeof(struct sockaddr_in);
 
     fprintf(stdout, "\n\nWaiting for incoming connection...\n");
+
     // Accept connections
     while (1) {
         // check MAX_CONN_NUM
@@ -580,7 +587,6 @@ void main_th_work(void) {
                 }
             }
 
-            //printf("\nNUM CONN: %d\t\tTH_ACT: %d\t\tTH_THR: %d\n\n", k -> connections, k -> th_act, k -> th_act_thr);
             j = 1;
             while (th_syn -> clients[i] != -1) {
                 if (j > MAX_CONN_NUM) {

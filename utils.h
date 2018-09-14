@@ -12,29 +12,38 @@
 #include <arpa/inet.h>
 
 #define STR_DIM 1024
-#define PRINT_DUMP 0
+#define PRINT_DUMP 1
 #define Q_FACTOR 100
 
+// struct that contained all information about an resized's image
 struct image_t {
     // Name of current image
     char name[NAME_MAX];
     // Memory mapped of resized image
     size_t size_r;
+    // struct for information of that image in cache
     struct cache_t *img_c;
+    // next image
     struct image_t *next_img;
 };
 
+// struct that contained all information about an image saved in cache
 struct cache_t {
     // quality factor
     int q;
+    // Name of image in cache
     char img_q[NAME_MAX];
+    // Memory mapped of image in cache
     size_t size_q;
+    // next image in cache
     struct cache_t *next_img_c;
 };
 
 // Struct to manage cache hit
 struct cache_hit {
+    // Name of image in cache
     char cache_name[NAME_MAX];
+    // next cache hit
     struct cache_hit *next_hit;
 };
 
@@ -46,21 +55,25 @@ struct cache_syn_t {
                         *cache_hit_head; // last cache hit
 };
 
-//
+// Struct that contained information of server's state
 struct state_syn_t {
     pthread_mutex_t *mtx;
     pthread_cond_t *cond;
-    volatile int    init_th_num, // number of thread initialized
-                    conn_num;
+    volatile int    init_th_num,    // number of thread initialized
+                    conn_num;       // number of connection
 };
 
+// struct use to syncronize thread
 struct th_syn_t {
     pthread_mutex_t *mtx;
     // array of cond with size MAX_CONN_NUM
     pthread_cond_t *cond;
-    struct sockaddr_in *cl_addr;
-    int *clients;
-    int accept;
+    struct sockaddr_in *cl_addr;    // client address of new connection
+    int *clients;                   // array of connection socket descriptor with size MAX_CONN_NUM
+                                    // if -1 thread associated is waiting
+                                    // if -2 there is no thread initialize associated
+    int accept;                     // boolean to comunicate at main thread that thread worker has accepted the new
+                                    // connection
 };
 
 extern int PORT;

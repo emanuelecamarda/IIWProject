@@ -1,6 +1,7 @@
 //
 // Created by emanuele on 31/08/18.
 //
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <sys/stat.h>
@@ -289,6 +290,7 @@ char *get_time(void) {
     return s;
 }
 
+// allocated a new resized image in the struct IMAGES
 void alloc_res_img(struct image_t **i, char *path) {
     char new_path[PATH_MAX], *img_name;
     struct image_t *new_img;
