@@ -6,7 +6,7 @@
 #define PROGETTO_SERVER_FUNCT_H
 
 #include "utils.h"
-#include "threads_work.h"
+#include "threads.h"
 
 void manage_option(int argc, char **argv);
 void manage_signal(void);

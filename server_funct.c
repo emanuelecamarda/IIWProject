@@ -15,7 +15,7 @@
 #include <pthread.h>
 
 #include "utils.h"
-#include "threads_work.h"
+#include "threads.h"
 
 // set the default value for path
 void set_default_path(void) {

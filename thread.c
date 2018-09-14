@@ -13,7 +13,7 @@
 
 #include "utils.h"
 #include "server_http.h"
-#include "threads_work.h"
+#include "threads.h"
 
 // create a new thread
 void create_th(void * (*work) (void *), void *k) {
