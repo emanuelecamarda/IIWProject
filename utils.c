@@ -21,8 +21,8 @@ char *USAGE_MSG =
         "Usage: %s [option]\n\n"
         "This is the list of the possible option:\n"
         "\t-p port number, default value: 11111.\n"
-        "\t-i image directory's path, default: current directory.\n"
-        "\t-l log file directory's path, default: current directory.\n"
+        "\t-i image directory's path, default: current directory/images.\n"
+        "\t-l log file directory's path, default: current directory/log.\n"
         "\t-n initial thread number, default value: 10.\n"
         "\t-m maximum connection number, default value: 800.\n"
         "\t-r resize images' percentage, default value: 50.\n"
@@ -90,7 +90,6 @@ void free_mem() {
     free(state_syn -> mtx);
     free(state_syn -> cond);
     free(cache_syn -> mtx);
-    free(cache_syn -> cond);
     if (cache_space >= 0 && cache_syn -> cache_hit_head && cache_syn -> cache_hit_tail) {
         struct cache_hit *to_be_removed;
         while (cache_syn -> cache_hit_tail) {
@@ -256,6 +255,7 @@ FILE *open_file(char *path, char *file_name) {
     char s[strlen(path) + 1 + strlen(file_name)];
     memset(s, 0, (size_t) strlen(path) + 1 + strlen(file_name));
     sprintf(s, "%s/%s", path, file_name);
+    printf("%s\n", s);
     FILE *f = fopen(s, "a");
     if (!f) {
         if (errno == EACCES) {

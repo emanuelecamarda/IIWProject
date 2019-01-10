@@ -21,40 +21,50 @@ int main(int argc, char **argv) {
 
 // Do all the operation to initialize the server
 void init(int argc, char **argv) {
+
     if(PRINT_DUMP)
         printf("Start\n");
+
     // setting paths of images e log file
     set_default_path();
     if (PRINT_DUMP)
         printf("Finish set_default_path()\n");
+
     // manage signal
     manage_signal();
     if (PRINT_DUMP)
         printf("Finish manage_signal()\n");
+
     // manage option passed by command line
     manage_option(argc, argv);
     if (PRINT_DUMP)
         printf("Finish manage_option()\n");
+
     // initialize thread and struct support
     struct_init();
     if (PRINT_DUMP)
         printf("Finish struct_init()\n");
+
     // starting server
     server_start();
     if (PRINT_DUMP)
         printf("Finish server_start()\n");
+
     // resize images
     image_resize();
     if (PRINT_DUMP)
         printf("Finish image_resize()\n");
+
     // create html file
     html_create();
     if (PRINT_DUMP)
         printf("Finish html_create()\n");
+
     // create thread to manage user's input
     create_th(manage_input, NULL);
     if (PRINT_DUMP)
         printf("Finish create_th(manage_input, NULL)\n");
+
     lock(th_syn -> mtx);
     if (PRINT_DUMP)
         printf("Main thread lock th_syn\n");
@@ -63,6 +73,7 @@ void init(int argc, char **argv) {
     unlock(th_syn->mtx);
     if (PRINT_DUMP)
         printf("Main thread unlock th_syn\n");
+
     if (PRINT_DUMP)
         printf("Finish th_init(MIN_TH_NUM)\n");
     printf("\nPort number: %d\nImages' path: %s\nLog file's path: %s\nMinimum threads' number: %d\n"

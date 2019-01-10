@@ -1,9 +1,0 @@
-richiesta di immagini:
-prima la ricerco tra le immagini resized, poi la cerco in cache:
-- se la trovo la sposto in cima alla struct
-- se non la trovo, faccio il resizing, se c'è spazio la inserisco in cache, altrimenti elimino l'immagina meno richiesta
-    in cache (quella in coda) e la aggiungo.
-
-th_syn gestisce la comunicazione tra il thread master e i worker tramite un vettore di cariabili di condizione.
-
-Q_factor di default è 0.7, il server accetta un range di q factor pari a (0.01, 1) variando di 0.01.

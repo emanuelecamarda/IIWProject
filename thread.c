@@ -106,7 +106,7 @@ void th_scaling_up(void) {
         if (PRINT_DUMP)
             printf("Lock state_syn in scaling up\n");
 
-        if (((float) state_syn -> conn_num) / ((float) state_syn -> init_th_num) * 100 > TH_SCALING_UP) {
+        if (((float) state_syn -> conn_num) / ((float) state_syn -> init_th_num) * 100 >= TH_SCALING_UP) {
             int n, i, j;
             if ((state_syn -> init_th_num) + MIN_TH_NUM <= MAX_CONN_NUM) {
                 n = MIN_TH_NUM;
@@ -145,7 +145,8 @@ void th_scaling_down(void) {
     lock(state_syn->mtx);
     if (PRINT_DUMP)
         printf("Lock state_syn in scaling down\n");
-    if (((float) state_syn->conn_num) / ((float) state_syn->init_th_num) * 100 < TH_SCALING_DOWN) {
+
+    if (((float) state_syn->conn_num) / ((float) state_syn->init_th_num) * 100 <= TH_SCALING_DOWN) {
         if (state_syn->init_th_num - MIN_TH_NUM >= MIN_TH_NUM) {
             n = MIN_TH_NUM;
         } else {
@@ -301,13 +302,6 @@ void *manage_connection(void *arg) {
         memcpy(&cl_addr, &th_syn -> cl_addr, sizeof(struct sockaddr_in));
         th_syn -> accept = 1;
 
-        lock(state_syn -> mtx);
-        {
-            if (PRINT_DUMP)
-                printf("Thread %d lock state_syn\n", *my_index);
-            state_syn->conn_num++;
-        }
-        unlock(state_syn -> mtx);
         if (PRINT_DUMP)
             printf("Thread %d unlock state_syn\n", *my_index);
 
@@ -347,7 +341,17 @@ void *manage_connection(void *arg) {
             state_syn -> conn_num--;
             if (PRINT_DUMP)
                 printf("Thread %d signal state_syn\n", *my_index);
-            signal_cond(state_syn -> cond);
+        } unlock(state_syn -> mtx);
+        if (PRINT_DUMP)
+            printf("Thread %d unlock state_syn\n", *my_index);
+
+        th_scaling_down();
+
+        lock(state_syn -> mtx);
+        if (PRINT_DUMP)
+            printf("Thread %d lock state_syn\n", *my_index);
+        {
+        signal_cond(state_syn -> cond);
         } unlock(state_syn -> mtx);
         if (PRINT_DUMP)
             printf("Thread %d unlock state_syn\n", *my_index);
@@ -361,7 +365,6 @@ void *manage_connection(void *arg) {
         if (PRINT_DUMP)
             printf("Thread %d unlock th_syn\n", *my_index);
 
-        th_scaling_down();
     }
     free(my_index);
     pthread_exit(EXIT_SUCCESS);

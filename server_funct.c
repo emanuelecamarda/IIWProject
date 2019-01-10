@@ -25,8 +25,8 @@ void set_default_path(void) {
     }
     memset(LOG_PATH, 0, PATH_MAX);
     memset(IMG_PATH, 0, PATH_MAX);
-    strcpy(LOG_PATH, cwd);
-    strcpy(IMG_PATH, cwd);
+    sprintf(LOG_PATH, "%s/log", cwd);
+    sprintf(IMG_PATH, "%s/images", cwd);
 }
 
 // Ignore signal SIGPIPE
@@ -114,7 +114,6 @@ void manage_option(int argc, char **argv) {
 
             case 'r':
                 errno = 0;
-                printf("optarg di 'r' = %s\n", optarg);
                 int resize_perc = (int) strtol(optarg, &e, 10);
                 if (errno != 0 || *e != '\0')
                     error_found("Error in strtol: Invalid number for resizing percentage!\n");
@@ -185,15 +184,11 @@ void manage_option(int argc, char **argv) {
 // Initialize all struct needed to server
 void struct_init(void) {
     pthread_mutex_t *cache_syn_mtx, *state_syn_mtx, *th_syn_mtx;
-    pthread_cond_t *cache_syn_cond, *state_syn_cond;
+    pthread_cond_t *state_syn_cond;
     int i;
 
     cache_syn_mtx = malloc(sizeof(pthread_mutex_t));
     if (!cache_syn_mtx) {
-        error_found("Error in malloc!\n");
-    }
-    cache_syn_cond = malloc(sizeof(pthread_cond_t));
-    if (!cache_syn_cond) {
         error_found("Error in malloc!\n");
     }
 
@@ -201,6 +196,7 @@ void struct_init(void) {
     if (!state_syn_mtx) {
         error_found("Error in malloc!\n");
     }
+
     state_syn_cond = malloc(sizeof(pthread_cond_t));
     if (!state_syn_cond) {
         error_found("Error in malloc!\n");
@@ -233,14 +229,12 @@ void struct_init(void) {
     if (pthread_mutex_init(cache_syn_mtx, NULL) != 0 ||
         pthread_mutex_init(state_syn_mtx, NULL) != 0 ||
         pthread_mutex_init(th_syn_mtx, NULL) != 0 ||
-        pthread_cond_init(cache_syn_cond, NULL) != 0 ||
         pthread_cond_init(state_syn_cond, NULL) != 0)
         error_found("Error in pthread_mutex_init or pthread_cond_init!\n");
 
     memset(th_syn -> cond, (int) '\0', sizeof(pthread_cond_t) * MAX_CONN_NUM);
 
     cache_syn -> mtx = cache_syn_mtx;
-    cache_syn -> cond = cache_syn_cond;
     cache_syn -> cache_hit_head = cache_syn -> cache_hit_tail = NULL;
     state_syn -> mtx = state_syn_mtx;
     state_syn -> cond = state_syn_cond;
@@ -512,6 +506,17 @@ void main_th_work(void) {
         memset(&cl_addr, (int) '\0', addr_size);
         errno = 0;
         conn_sd = accept(LISTEN_SD, (struct sockaddr *) &cl_addr, &addr_size);
+
+        lock(state_syn -> mtx);
+        if (PRINT_DUMP)
+            printf("Main thread lock state_syn\n");
+        {
+            state_syn -> conn_num++;
+        }
+        unlock(state_syn -> mtx);
+        if (PRINT_DUMP)
+            printf("Main thread unlock state_syn\n");
+
         lock(th_syn -> mtx);
         if (PRINT_DUMP)
             printf("Main thread lock th_syn\n");

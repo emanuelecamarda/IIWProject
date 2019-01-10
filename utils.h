@@ -12,7 +12,7 @@
 #include <arpa/inet.h>
 
 #define STR_DIM 1024
-#define PRINT_DUMP 1
+#define PRINT_DUMP 0
 #define Q_FACTOR 100
 
 // struct that contained all information about an resized's image
@@ -50,7 +50,6 @@ struct cache_hit {
 // struct to syn access on cache's resource 
 struct cache_syn_t {
     pthread_mutex_t *mtx;
-    pthread_cond_t *cond;
     struct cache_hit    *cache_hit_tail, // oldest cache hit
                         *cache_hit_head; // last cache hit
 };

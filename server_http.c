@@ -68,7 +68,7 @@ void analyze_http_request(int conn_sd, struct sockaddr_in cl_addr) {
             }
             break;
         } else if (tmp == 0) {
-            fprintf(stderr, "Error in recv: client disconnected\n");
+            fprintf(stderr, "Client disconnected\n");
             break;
         } else {
             split_http_request(http_req, line_req);
@@ -136,9 +136,17 @@ int http_response(int conn_sd, char **line_req) {
                    "Content-Length: %d\r\nConnection: %s\r\n\r\n";
     char *t = get_time();
     char *server = "ServerIIWProject";
-    char *h;
+    char *h, *body = malloc(STR_DIM + sizeof(char));
+    if (!body) {
+        error_found("Error in malloc!\n");
+    }
+    char *state = "{"
+                  "\"threads\": \"%d\","
+                  "\"connection\": \"%d\""
+                  "}";
 
     memset(http_resp, (int) '\0',STR_DIM * STR_DIM * 2);
+    memset(body, (int) '\0',STR_DIM);
 
     if (!line_req[0] || !line_req[1] || !line_req[2] ||
         ((strncmp(line_req[0], "GET", 3) && strncmp(line_req[0], "HEAD", 4)) ||
@@ -155,7 +163,6 @@ int http_response(int conn_sd, char **line_req) {
         return 0;
     }
 
-    // main page
     if (strncmp(line_req[1], "/", strlen(line_req[1])) == 0) {
         sprintf(http_resp, header, 200, "OK", t, server, "text/html", strlen(HTML[0]), "keep-alive");
         if (strncmp(line_req[0], "HEAD", 4)) {
@@ -169,7 +176,27 @@ int http_response(int conn_sd, char **line_req) {
             return -1;
         }
     }
+
     else {
+
+        // get status
+        if (!(strncmp(line_req[1], "/status",7))) {
+            lock(state_syn -> mtx);
+            sprintf(body, state, state_syn -> init_th_num, state_syn -> conn_num);
+            unlock(state_syn -> mtx);
+            sprintf(http_resp, header, 200, "OK", t, server, "application/json", strlen(body), "keep-alive");
+            if (strncmp(line_req[0], "HEAD", 4)) {
+                h = http_resp;
+                h += strlen(http_resp);
+                memcpy(h, body, strlen(body));
+            }
+            if (send_http_response(conn_sd, http_resp, strlen(http_resp)) == -1) {
+                fprintf(stderr, "Error in send_http_response()!\n");
+                free_http_mem(t, http_resp);
+                return -1;
+            }
+        }
+
         struct image_t *i = IMAGES;
         char *p_name;
         if (!(p_name = strrchr(line_req[1], '/')))
@@ -183,8 +210,8 @@ int http_response(int conn_sd, char **line_req) {
                 ssize_t dim = 0;
                 char *img_to_send = NULL;
 
+                // Looking for resized image
                 if (!strncmp(p, line_req[1], strlen(p) - strlen(".XXXXXX"))) {
-                    // Looking for resized image
                     if (strncmp(line_req[0], "HEAD", 4)) {
                         img_to_send = get_img(p_name, i->size_r, TMP_RESIZED_PATH);
                         if (!img_to_send) {
@@ -194,6 +221,7 @@ int http_response(int conn_sd, char **line_req) {
                         }
                     }
                     dim = i->size_r;
+
                 } else {
                     // Looking for image in memory cache
                     char name_cached_img[STR_DIM];
@@ -203,8 +231,6 @@ int http_response(int conn_sd, char **line_req) {
                     if (accept == -1)
                         fprintf(stderr, "Error in strtod!\n");
                     int q = accept < 0 ? Q_FACTOR : accept;
-
-                    printf("q = %d, accept = %d, Accept header = %s\n", q, accept, line_req[5]);
 
                     lock(cache_syn -> mtx);
                     if (PRINT_DUMP)
@@ -248,9 +274,9 @@ int http_response(int conn_sd, char **line_req) {
                             char path[STR_DIM];
                             memset(path, (int) '\0', STR_DIM);
                             sprintf(path, "%s/%s", TMP_CACHE_PATH, name_cached_img);
-                            
+
+                            // Cache of limited size, if it has not yet reached the maximum cache size
                             if (cache_space > 0) {
-                                // Cache of limited size, if it has not yet reached the maximum cache size
                                 // %s/%s = path/name_image; %d = factor quality; %s/%s = path/name_image;
                                 char *format = "convert %s/%s -quality %d %s/%s;exit";
                                 char command[STR_DIM];
@@ -323,8 +349,9 @@ int http_response(int conn_sd, char **line_req) {
                                     cache_syn -> cache_hit_head = cache_syn -> cache_hit_head -> next_hit;
                                 }
                                 cache_space--;
+
+                            // Cache full. Deleting the oldest requested element.
                             } else if (!cache_space) {
-                                // Cache full. Deleting the oldest requested element.
                                 char name_to_remove[STR_DIM];
                                 memset(name_to_remove, (int) '\0', STR_DIM);
                                 sprintf(name_to_remove, "%s/%s", TMP_CACHE_PATH,
@@ -503,8 +530,9 @@ int http_response(int conn_sd, char **line_req) {
                                 cache_syn -> cache_hit_head = cache_syn -> cache_hit_head -> next_hit;
                                 cache_syn -> cache_hit_tail = cache_syn -> cache_hit_tail -> next_hit;
                                 free(to_be_removed);
+
+                             // Case of unlimited cache
                             } else {
-                                // Case of unlimited cache
                                 // %s/%s = path/name_image; %d = factor quality: %s/%s = path/name_image;
                                 char *format = "convert %s/%s -quality %d %s/%s;exit";
                                 char command[STR_DIM];
